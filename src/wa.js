@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { log } from './db.js';
 import { dataDir } from './paths.js';
+import { rememberSent, findSent, forgetAccount } from './sentStore.js';
 
 const sessions = new Map(); // accountId -> { sock, status, qr, me }
 const authDir = (id) => {
@@ -35,6 +36,9 @@ export async function startAccount(id) {
     browser: Browsers.windows('Desktop'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    // Lets Baileys resend a message when a recipient's phone couldn't decrypt it.
+    // Without this, those people are stuck on "Waiting for this message".
+    getMessage: async (key) => findSent(id, key.id),
   });
 
   const s = { sock, status: 'connecting', qr: null, me: null };
@@ -90,6 +94,7 @@ export async function logoutAccount(id) {
   sessions.delete(id);
   try { await s?.sock?.logout(); } catch {}
   fs.rmSync(dir, { recursive: true, force: true });
+  forgetAccount(id);
 }
 
 function live(id) {
@@ -123,7 +128,8 @@ export const dryRunSent = [];
 export async function sendText(id, jid, text) {
   if (process.env.HYPE_DRY_RUN) { dryRunSent.push({ id, jid, text }); return; } // test mode: nothing leaves the PC
   const s = live(id);
-  await s.sock.sendMessage(jid, { text });
+  const sent = await s.sock.sendMessage(jid, { text });
+  rememberSent(id, sent); // needed to answer "please resend" requests from recipients' phones
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

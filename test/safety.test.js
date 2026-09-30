@@ -64,5 +64,22 @@ assert.equal(reloaded.db().programmes.find((p) => p.name === 'Deepak Crypto' || 
   assert.equal(d.workshops.find((w) => w.id === 'w4').groups[0].name, 'Untouched', 'other numbers not touched');
 }
 
+// Sent messages are kept so "please resend" requests (the "Waiting for this message" fix) can be answered
+{
+  const { rememberSent, findSent, forgetAccount } = await import('../src/sentStore.js');
+  const { proto } = await import('@whiskeysockets/baileys');
+  const message = proto.Message.fromObject({ extendedTextMessage: { text: '🔥 *Workshop* tomorrow\n\nhttps://forms.gle/x' } });
+  rememberSent('acc1', { key: { id: 'MSG1', remoteJid: 'g@g.us', fromMe: true }, message });
+  assert.equal(findSent('acc1', 'MSG1').extendedTextMessage.text, '🔥 *Workshop* tomorrow\n\nhttps://forms.gle/x');
+  assert.equal(findSent('acc1', 'nope'), undefined);
+  assert.equal(findSent('acc2', 'MSG1'), undefined, 'kept per number');
+  // survives a restart (fresh module = fresh memory, reads the file)
+  const fresh = await import('../src/sentStore.js?restart');
+  assert.equal(fresh.findSent('acc1', 'MSG1').extendedTextMessage.text.startsWith('🔥'), true, 'kept on disk');
+  forgetAccount('acc1');
+  const fresh2 = await import('../src/sentStore.js?restart2');
+  assert.equal(fresh2.findSent('acc1', 'MSG1'), undefined, 'removed with the number');
+}
+
 console.log('Safety tests passed ✓');
 process.exit(0);
