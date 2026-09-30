@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hype Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f5f2;--card:#fff;--ink:#17171a;--muted:#6b6b73;--line:#e6e4df;
+  --accent:#ff5a1f;--accent-soft:#fff0e9;--ok:#1a9b5c;--ok-soft:#e6f6ee;--warn:#b7791f;--warn-soft:#fdf3e1;--bad:#d23b3b;--bad-soft:#fdeaea;
+  --hype:#7c4dff;--hype-soft:#f1ecff;--tmr:#ff5a1f;--tmr-soft:#fff0e9;--day:#1a9b5c;--day-soft:#e6f6ee;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#111113;--card:#1b1b1f;--ink:#f1f0ee;--muted:#9a9aa3;--line:#2c2c32;
+  --accent-soft:#3a1f14;--ok-soft:#133226;--warn-soft:#352914;--bad-soft:#3a1717;
+  --hype-soft:#261d42;--tmr-soft:#3a1f14;--day-soft:#133226;
+}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Inter,system-ui,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-.01em}
+header h1 span{color:var(--accent)}
+.grow{flex:1}
+main{max-width:1180px;margin:0 auto;padding:24px 28px 80px;display:grid;gap:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.card h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:860px){.cols{grid-template-columns:1fr}main{padding:16px}header{padding:14px 16px}}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--line);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.reschedule{background:var(--warn-soft);color:var(--warn)}
+.pill.hype{background:var(--hype-soft);color:var(--hype)}.pill.tomorrow{background:var(--tmr-soft);color:var(--tmr)}.pill.dayof{background:var(--day-soft);color:var(--day)}
+button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:10px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+button.small{padding:5px 10px;font-size:12px}
+button:disabled{opacity:.5;cursor:wait}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
+textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+label{display:grid;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+.form{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.form .span2{grid-column:span 2}.form .span4{grid-column:span 4}
+@media (max-width:860px){.form{grid-template-columns:1fr 1fr}.form .span4,.form .span2{grid-column:span 2}}
+.muted{color:var(--muted)}.small{font-size:12px}
+/* week grid */
+.week{overflow-x:auto}
+.week table{border-collapse:separate;border-spacing:0;width:100%;min-width:760px}
+.week th,.week td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.week th{font-size:12px;color:var(--muted);font-weight:600}
+.week th.today{color:var(--accent)}
+.week td.name{font-weight:600;cursor:pointer;min-width:170px}
+.week td.name:hover{color:var(--accent)}
+.cell .pill{display:flex;justify-content:center}
+.cell .t{font-size:11px;color:var(--muted);text-align:center;margin-top:3px}
+.cell .star{display:flex;justify-content:center;font-size:12px;font-weight:700;color:var(--accent)}
+/* accounts */
+.acc{display:flex;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.acc:first-of-type{border-top:0}
+.acc img{width:170px;height:170px;border-radius:10px;background:#fff;padding:6px}
+/* editor */
+dialog{border:0;border-radius:18px;padding:0;width:min(920px,96vw);max-height:92vh;background:var(--card);color:var(--ink);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,10,12,.5)}
+.dhead{display:flex;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:2}
+.dhead h3{margin:0;font-size:16px}
+.dbody{padding:22px;display:grid;gap:22px;overflow:auto}
+.section h4{margin:0 0 10px;font-size:13px;display:flex;align-items:center;gap:8px}
+.step{width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:inline-grid;place-items:center;font-size:12px;font-weight:700}
+.groups{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.g{display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.g:last-child{border-bottom:0}.g input{width:auto}
+.g.disabled{opacity:.45;cursor:not-allowed}
+.preview{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px}
+.facts li{margin-bottom:3px}
+.log{max-height:280px;overflow:auto;font-size:12.5px}
+.log div{padding:6px 0;border-bottom:1px solid var(--line)}
+.send{border-top:1px solid var(--line);padding:12px 0}
+.send:first-child{border-top:0}
+.send details summary{cursor:pointer;color:var(--muted);font-size:12px}
+.empty{padding:20px;text-align:center;color:var(--muted)}
+.prog{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.prog:first-child{border-top:0}
+.prog a{color:var(--muted);font-size:12px;text-decoration:none;word-break:break-all}
+.pending{background:var(--warn-soft);border-radius:12px;padding:12px 14px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;opacity:0;transition:.2s;pointer-events:none;z-index:99}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hype<span>.</span>Dispatch</h1>
+  <span class="grow"></span>
+  <span id="aiPill" class="pill">AI</span>
+  <span id="clock" class="pill"></span>
+</header>
+
+<main>
+  <section class="card">
+    <div class="row" style="margin-bottom:14px">
+      <h2 style="margin:0">This week</h2>
+      <span class="muted small">What each workshop sends, day by day (IST)</span>
+      <span class="grow"></span>
+      <button class="primary" onclick="openEditor()">+ New workshop</button>
+    </div>
+    <div class="week" id="week"></div>
+    <div class="row small muted" style="margin-top:12px;gap:14px">
+      <span><span class="pill hype">Hype</span> build excitement</span>
+      <span><span class="pill tomorrow">Tomorrow</span> + form & Zoom link</span>
+      <span><span class="pill dayof">Live today</span> + Zoom link</span>
+      <span><span class="pill reschedule">Rescheduled</span> announced at <b id="rchk">7 PM</b></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="margin-bottom:6px">
+      <h2 style="margin:0">Programmes</h2>
+      <span class="muted small">One per landing page. Build each fact sheet once, reuse it every week.</span>
+      <span class="grow"></span>
+      <button class="small" onclick="openProg()">+ Add programme</button>
+    </div>
+    <div id="progs"></div>
+  </section>
+
+  <div class="cols">
+    <section class="card">
+      <h2>WhatsApp numbers</h2>
+      <div id="accounts"></div>
+      <div class="row" style="margin-top:12px">
+        <input id="accName" placeholder="Label, e.g. Workshop number 1" style="flex:1">
+        <button onclick="addAccount()">Connect number</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Activity</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Sent messages</h2>
+    <div id="sends"></div>
+  </section>
+</main>
+
+<!-- Programme editor -->
+<dialog id="progDlg">
+  <div class="dhead"><h3 id="pTitle">Programme</h3><span class="grow"></span>
+    <button class="ghost" id="pDel" onclick="delProg()">Delete</button>
+    <button class="ghost" onclick="progDlg.close()">Close</button>
+    <button class="primary" onclick="busy(null, () => saveProg())">Save</button>
+  </div>
+  <div class="dbody">
+    <div class="form">
+      <label class="span2">Name<input id="p_name"></label>
+      <label class="span2">Landing page URL<input id="p_landingUrl"></label>
+      <label class="span4">Focus (optional, if the page has more than one offer)<input id="p_focus" placeholder="e.g. The AI for business owners masterclass only"></label>
+    </div>
+    <div class="section">
+      <h4>Fact sheet</h4>
+      <p class="muted small" style="margin:0 0 10px">Every message is written only from this. Dates and times come from each workshop run, not from the page. Give it one look and fix anything wrong.</p>
+      <div class="row" style="margin-bottom:10px">
+        <button id="factsBtn" onclick="buildFacts()">Read landing page</button>
+        <button class="ghost small" onclick="$('pasteWrap').hidden=!$('pasteWrap').hidden">Page won't load? Paste its text</button>
+      </div>
+      <div id="pasteWrap" hidden style="margin-bottom:10px"><textarea id="pasted" placeholder="Paste everything from the landing page here, then press Read landing page"></textarea></div>
+      <div id="factsView"></div>
+      <details style="margin-top:8px"><summary class="small muted">Edit fact sheet (JSON)</summary><textarea id="p_factSheet" style="min-height:240px;margin-top:8px"></textarea></details>
+    </div>
+  </div>
+</dialog>
+
+<!-- Workshop editor -->
+<dialog id="editor">
+  <div class="dhead"><h3 id="edTitle">New workshop</h3><span class="grow"></span>
+    <button class="ghost" id="delBtn" onclick="delWorkshop()">Delete</button>
+    <button class="ghost" onclick="editor.close()">Close</button>
+    <button class="primary" onclick="saveWorkshop()">Save</button>
+  </div>
+  <div class="dbody">
+    <div class="section">
+      <h4><span class="step">1</span>Which workshop, when</h4>
+      <div class="form">
+        <label class="span2">Programme<select id="f_programmeId"></select></label>
+        <label>Workshop date<input id="f_date" type="date"></label>
+        <label>Starts at (IST)<input id="f_startTime" type="time"></label>
+        <label class="span2">Time as written in messages <span class="muted" style="font-weight:400">(optional)</span><input id="f_timeLabel" placeholder="Blank = start time + IST, e.g. 7 PM IST"></label>
+        <label>Daily hype at<input id="f_sendTime" type="time"></label>
+        <label>Start sending from<input id="f_firstSendDate" type="date"></label>
+        <label>Day-of message<select id="f_dayOf"><option value="true">On</option><option value="false">Off</option></select></label>
+        <label>Day-of message at<input id="f_dayOfTime" type="time"></label>
+        <label>Status<select id="f_active"><option value="true">Active (auto-send)</option><option value="false">Paused</option></select></label>
+        <label>Name <span class="muted" style="font-weight:400">(optional)</span><input id="f_name" placeholder="Auto"></label>
+        <label class="span2">Form link (sent the day before)<input id="f_formLink" placeholder="https://forms..."></label>
+        <label class="span2">Zoom link (day before + day of)<input id="f_zoomLink" placeholder="https://zoom.us/j/..."></label>
+      </div>
+      <div id="factWarn" class="small" style="margin-top:8px;color:var(--bad)"></div>
+    </div>
+
+    <div class="section">
+      <h4><span class="step">2</span>Community to send to</h4>
+      <p class="muted small" style="margin:0 0 10px">Once you pick the community and save, messages go out automatically every day until the workshop.</p>
+      <div class="row" style="margin-bottom:10px">
+        <select id="f_account" style="max-width:260px" onchange="loadGroups()"></select>
+        <input id="gSearch" placeholder="Search, e.g. 4th Oct" oninput="renderGroups()" style="flex:1;min-width:160px">
+        <span id="gCount" class="pill"></span>
+      </div>
+      <div class="groups" id="groups"><div class="empty">Pick a connected number to load its groups</div></div>
+    </div>
+
+    <div class="section" id="rsSection">
+      <h4><span class="step">3</span>Reschedule</h4>
+      <div id="rsPending"></div>
+      <div id="rsForm">
+        <p class="muted small" style="margin:0 0 10px">Enter the new date. It's announced to the community at the daily check (<b class="rchk">7 PM</b>), so you can still cancel until then. Regular messages pause until it's announced.</p>
+        <div class="form">
+          <label>New date<input id="r_date" type="date"></label>
+          <label>New start (IST)<input id="r_startTime" type="time"></label>
+          <label class="span2">New time as written <span class="muted" style="font-weight:400">(optional)</span><input id="r_timeLabel" placeholder="Blank = start time + IST"></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button id="rsLater" onclick="reschedule(false)">Save, announce at <span class="rchk">7 PM</span></button>
+          <button id="rsNow" onclick="reschedule(true)">Announce now</button>
+          <button class="ghost" onclick="preview('reschedule')">Preview announcement</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h4><span class="step">4</span>Preview (nothing is sent)</h4>
+      <div class="row" style="margin-bottom:10px">
+        <button onclick="preview('hype')">Hype</button>
+        <button onclick="preview('tomorrow')">Day before</button>
+        <button onclick="preview('dayof')">Day of</button>
+        <span id="pvMeta" class="small muted"></span>
+      </div>
+      <div id="pv"></div>
+      <div class="row" id="testRow" hidden style="margin-top:10px">
+        <select id="testJid" style="flex:1"></select>
+        <button onclick="sendTest()">Send this preview to one group</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S = null, cur = null, curProg = null, allGroups = [], picked = new Map(), pvText = '';
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2800); }
+async function busy(btn, fn) { if (btn) btn.disabled = true; try { await fn(); } catch (e) { toast(e.message); } finally { if (btn) btn.disabled = false; } }
+const fmt12 = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Number); const a = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return m ? `${h}:${String(m).padStart(2, '0')} ${a}` : `${h} ${a}`; };
+const niceDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const progById = (id) => S.programmes.find((p) => p.id === id);
+
+// ---------- main view ----------
+const PHASE_LABEL = { hype: 'Hype', tomorrow: 'Tomorrow', dayof: 'Live today', reschedule: 'Rescheduled' };
+function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function diff(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 864e5); }
+function phaseOn(w, day) { if (w.firstSendDate && day < w.firstSendDate && day !== w.date) return null; const d = diff(day, w.date); return d >= 2 ? 'hype' : d === 1 ? 'tomorrow' : d === 0 ? (w.dayOf !== false ? 'dayof' : 'event') : null; }
+
+function renderWeek() {
+  const days = [...Array(7)].map((_, i) => addDays(S.now.date, i));
+  const ws = S.workshops.filter((w) => w.date >= S.now.date || w.pendingReschedule).sort((a, b) => a.date.localeCompare(b.date));
+  if (!ws.length) { $('week').innerHTML = '<div class="empty">No upcoming workshops yet. Add one to start the daily hype.</div>'; return; }
+  const head = days.map((d, i) => `<th class="${i ? '' : 'today'}">${i ? niceDate(d) : 'Today'}</th>`).join('');
+  const rows = ws.map((w) => {
+    const prog = progById(w.programmeId);
+    const pr = w.pendingReschedule;
+    const warn = pr ? `<span class="pill reschedule">→ ${niceDate(pr.date)} ${pr.sendNow ? 'announcing now' : 'at ' + S.rescheduleCheck}</span>`
+      : !prog?.factSheet ? '<span class="pill bad">Fact sheet missing</span>'
+      : !w.groups?.length ? '<span class="pill warn">No community picked</span>'
+      : w.active === false ? '<span class="pill">Paused</span>'
+      : `<span class="pill ok">Auto · ${w.groups.length} group${w.groups.length > 1 ? 's' : ''}</span>`;
+    const cells = days.map((d) => {
+      const rs = S.sends.find((s) => s.workshopId === w.id && s.phase === 'reschedule' && s.date === d);
+      if (rs) return `<td class="cell"><span class="pill reschedule">${rs.done ? '✓ ' : ''}Rescheduled</span></td>`;
+      if (pr) return d === S.now.date ? `<td class="cell"><span class="pill reschedule">Pending</span><div class="t">${pr.sendNow ? 'now' : S.rescheduleCheck}</div></td>` : '<td></td>';
+      const p = phaseOn(w, d);
+      if (!p) return '<td></td>';
+      if (p === 'event') return `<td class="cell"><div class="star">★ Workshop</div></td>`;
+      const t = p === 'dayof' ? w.dayOfTime : w.sendTime;
+      const sent = S.sends.find((s) => s.key === `${w.id}|${d}|${p}` && s.done);
+      return `<td class="cell"><span class="pill ${p}">${sent ? '✓ ' : ''}${PHASE_LABEL[p]}</span><div class="t">${t || ''}</div>${p === 'dayof' ? '<div class="star">★ ' + fmt12(w.startTime) + '</div>' : ''}</td>`;
+    }).join('');
+    return `<tr><td class="name" onclick="openEditor('${w.id}')">${esc(w.displayName)}<div class="small muted">${niceDate(w.date)} · ${esc(w.timeLabelShown)}</div><div style="margin-top:4px">${warn}</div></td>${cells}</tr>`;
+  }).join('');
+  $('week').innerHTML = `<table><thead><tr><th>Workshop</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderProgs() {
+  $('progs').innerHTML = S.programmes.map((p) => `
+    <div class="prog">
+      <div class="grow"><div style="font-weight:600">${esc(p.name)}</div><a href="${esc(p.landingUrl)}" target="_blank">${esc(p.landingUrl)}</a></div>
+      ${p.factSheet ? `<span class="pill ok">Fact sheet ready</span>` : `<span class="pill bad">Not built</span>`}
+      <button class="small" onclick="openProg('${p.id}')">${p.factSheet ? 'View' : 'Build'}</button>
+    </div>`).join('');
+}
+
+function renderAccounts() {
+  const cls = { connected: 'ok', 'scan-qr': 'warn', connecting: 'warn', reconnecting: 'warn', offline: 'bad' };
+  $('accounts').innerHTML = S.accounts.length ? S.accounts.map((a) => `
+    <div class="acc">
+      ${a.qr ? `<img src="${a.qr}" alt="QR">` : ''}
+      <div class="grow">
+        <div style="font-weight:600">${esc(a.name)}</div>
+        <div class="small muted">${a.me ? esc(a.me.split('@')[0]) : a.qr ? 'WhatsApp → Linked devices → Link a device, then scan' : ''}</div>
+        <div style="margin-top:6px"><span class="pill ${cls[a.status] || ''}">${a.status}</span></div>
+      </div>
+      ${a.status === 'offline' ? `<button class="small" onclick="api('/api/accounts/${a.id}/connect',{method:'POST'}).then(refresh)">Reconnect</button>` : ''}
+      <button class="ghost small" onclick="if(confirm('Log out and remove this number?'))api('/api/accounts/${a.id}',{method:'DELETE'}).then(refresh)">Remove</button>
+    </div>`).join('') : '<div class="empty">No numbers yet. Add one and scan the QR from your phone.</div>';
+}
+
+function renderLog() {
+  $('log').innerHTML = S.log.length ? S.log.map((l) => `<div><span class="pill ${l.level === 'error' ? 'bad' : l.level === 'warn' ? 'warn' : 'ok'}">${l.level}</span> <span class="muted small">${new Date(l.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span><br>${esc(l.msg)}</div>`).join('') : '<div class="empty">Nothing yet</div>';
+}
+
+function renderSends() {
+  $('sends').innerHTML = S.sends.length ? S.sends.slice(0, 25).map((s) => {
+    const r = Object.values(s.results || {}); const ok = r.filter((x) => x.ok).length;
+    return `<div class="send"><div class="row"><b>${esc(s.workshop)}</b><span class="pill ${s.phase}">${PHASE_LABEL[s.phase]}</span><span class="small muted">${s.date}</span><span class="grow"></span>${s.source === 'fallback' ? '<span class="pill warn">safe template</span>' : ''}<span class="pill ${ok === r.length ? 'ok' : 'warn'}">${ok}/${r.length} groups</span></div>
+      <details><summary>Message</summary><div class="preview" style="margin-top:8px">${esc(s.text)}</div>${r.filter((x) => !x.ok).map((x) => `<div class="small" style="color:var(--bad)">✗ ${esc(x.name)}: ${esc(x.error)}</div>`).join('')}</details></div>`;
+  }).join('') : '<div class="empty">Messages will show here once they go out</div>';
+}
+
+async function refresh() {
+  S = await api('/api/state');
+  $('clock').textContent = `${S.now.date} · ${S.now.hm} IST`;
+  $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
+  $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key';
+  document.querySelectorAll('#rchk,.rchk').forEach((el) => { el.textContent = fmt12(S.rescheduleCheck); });
+  renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
+}
+
+async function addAccount() { await busy(null, async () => { await api('/api/accounts', { method: 'POST', body: { name: $('accName').value } }); $('accName').value = ''; await refresh(); }); }
+
+// ---------- programme editor ----------
+function openProg(id) {
+  curProg = id ? progById(id) : null;
+  const p = curProg || {};
+  $('pTitle').textContent = p.name || 'New programme';
+  $('pDel').hidden = !curProg;
+  $('p_name').value = p.name || ''; $('p_landingUrl').value = p.landingUrl || ''; $('p_focus').value = p.focus || '';
+  $('p_factSheet').value = p.factSheet ? JSON.stringify(p.factSheet, null, 2) : '';
+  $('pasted').value = ''; $('pasteWrap').hidden = true;
+  renderFacts(p.factSheet);
+  progDlg.showModal();
+}
+async function saveProg(silent) {
+  const body = { name: $('p_name').value, landingUrl: $('p_landingUrl').value, focus: $('p_focus').value };
+  const fs = $('p_factSheet').value.trim();
+  if (fs) { try { body.factSheet = JSON.parse(fs); } catch { throw new Error('Fact sheet JSON has a typo'); } }
+  curProg = curProg ? await api('/api/programmes/' + curProg.id, { method: 'PUT', body }) : await api('/api/programmes', { method: 'POST', body });
+  $('pDel').hidden = false;
+  if (silent !== true) { toast('Saved'); progDlg.close(); }
+  await refresh();
+}
+async function delProg() { if (!confirm('Delete this programme?')) return; await busy(null, async () => { await api('/api/programmes/' + curProg.id, { method: 'DELETE' }); progDlg.close(); refresh(); }); }
+
+function renderFacts(f) {
+  if (!f) { $('factsView').innerHTML = '<div class="empty" style="padding:12px">No fact sheet yet. Press Read landing page.</div>'; return; }
+  const list = (t, a) => a?.length ? `<div><b class="small">${t}</b><ul class="facts">${a.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+  $('factsView').innerHTML = `<div class="preview" style="white-space:normal">
+    <div style="font-weight:700;font-size:15px">${esc(f.title)}</div>
+    ${f.tagline ? `<div class="muted">${esc(f.tagline)}</div>` : ''}
+    <div class="row small" style="margin:8px 0">${[f.duration, f.format, f.price_text, f.host].filter(Boolean).map((x) => `<span class="pill">${esc(x)}</span>`).join('')}</div>
+    ${list('Host credentials', f.host_credentials)}${list("What you'll learn", f.what_youll_learn)}${list('Outcomes', f.outcomes)}${list("Who it's for", f.who_its_for)}${list('Bonuses', f.bonuses)}${list('Other facts', f.other_key_facts)}
+  </div>`;
+}
+
+async function buildFacts() {
+  await busy($('factsBtn'), async () => {
+    await saveProg(true);
+    $('factsBtn').textContent = 'Reading…';
+    try {
+      const f = await api(`/api/programmes/${curProg.id}/facts`, { method: 'POST', body: { pastedText: $('pasted').value } });
+      $('p_factSheet').value = JSON.stringify(f, null, 2); renderFacts(f);
+      toast('Fact sheet ready. Give it a quick look.');
+      refresh();
+    } finally { $('factsBtn').textContent = 'Read landing page'; }
+  });
+}
+
+// ---------- workshop editor ----------
+const F = ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'active', 'formLink', 'zoomLink', 'firstSendDate'];
+function openEditor(id) {
+  cur = id ? S.workshops.find((w) => w.id === id) : null;
+  const w = cur || { sendTime: '11:00', dayOf: true, dayOfTime: '10:00', active: true, date: addDays(S.now.date, 4), firstSendDate: S.now.date, startTime: '19:00' };
+  $('f_programmeId').innerHTML = '<option value="">Choose…</option>' + S.programmes.map((p) => `<option value="${p.id}">${esc(p.name)}${p.factSheet ? '' : ' (fact sheet not built)'}</option>`).join('');
+  $('edTitle').textContent = cur ? cur.displayName : 'New workshop';
+  $('delBtn').hidden = !cur;
+  for (const k of F) $('f_' + k).value = w[k] ?? '';
+  $('f_programmeId').onchange = checkFacts; checkFacts();
+  $('f_account').innerHTML = '<option value="">Choose sending number…</option>' + S.accounts.map((a) => `<option value="${a.id}" ${a.id === w.account ? 'selected' : ''}>${esc(a.name)} (${a.status})</option>`).join('');
+  picked = new Map((w.groups || []).map((g) => [g.jid, g]));
+  allGroups = []; $('pv').innerHTML = ''; $('pvMeta').textContent = ''; $('testRow').hidden = true; $('gSearch').value = '';
+  ['r_date', 'r_startTime', 'r_timeLabel'].forEach((k) => { $(k).value = ''; });
+  $('r_startTime').value = w.startTime || '';
+  renderReschedule();
+  if (w.account) loadGroups(); else renderGroups();
+  editor.showModal();
+}
+function checkFacts() {
+  const p = progById($('f_programmeId').value);
+  $('factWarn').textContent = p && !p.factSheet ? `${p.name} has no fact sheet yet. Build it in Programmes, otherwise nothing can be sent.` : '';
+}
+
+function renderReschedule() {
+  $('rsSection').hidden = !cur;
+  const pr = cur?.pendingReschedule;
+  $('rsForm').hidden = !!pr;
+  const passed = S.now.hm >= S.rescheduleCheck; // after today's check, a saved reschedule goes out right away
+  $('rsLater').hidden = passed;
+  $('rsNow').textContent = passed ? `Announce now (today's ${fmt12(S.rescheduleCheck)} check has passed)` : 'Announce now';
+  $('rsPending').innerHTML = pr ? `<div class="pending row">
+      <div class="grow"><b>Moving to ${niceDate(pr.date)}${pr.startTime ? ', ' + fmt12(pr.startTime) : ''}</b>
+      <div class="small">${pr.sendNow || S.now.hm >= S.rescheduleCheck ? 'Announcing within a minute.' : `Will be announced at ${fmt12(S.rescheduleCheck)}, then daily messages continue toward the new date.`}</div></div>
+      <button class="small" onclick="preview('reschedule')">Preview</button>
+      <button class="small" onclick="cancelReschedule()">Cancel</button></div>` : '';
+}
+
+function collect() {
+  const b = {};
+  for (const k of F) b[k] = $('f_' + k).value;
+  b.dayOf = b.dayOf === 'true'; b.active = b.active === 'true';
+  b.account = $('f_account').value;
+  b.groups = [...picked.values()];
+  return b;
+}
+async function saveWorkshop(silent) {
+  await busy(null, async () => {
+    const body = collect();
+    if (!silent && body.groups.length && !body.account) throw new Error('Pick the sending number');
+    cur = cur ? await api('/api/workshops/' + cur.id, { method: 'PUT', body }) : await api('/api/workshops', { method: 'POST', body });
+    $('delBtn').hidden = false;
+    await refresh();
+    cur = S.workshops.find((w) => w.id === cur.id);
+    renderReschedule();
+    if (silent !== true) { toast(body.groups.length && body.active ? 'Saved. Auto-send is on.' : 'Saved'); editor.close(); }
+  });
+}
+async function delWorkshop() { if (!confirm('Delete this workshop?')) return; await api('/api/workshops/' + cur.id, { method: 'DELETE' }); editor.close(); refresh(); }
+
+async function reschedule(now) {
+  const body = { date: $('r_date').value, startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value, sendNow: now };
+  if (!body.date) return toast('Pick the new date');
+  if (now && !confirm(`Announce the new date to ${cur.groups?.length || 0} group(s) right now?`)) return;
+  await busy(null, async () => {
+    await api(`/api/workshops/${cur.id}/reschedule`, { method: 'POST', body });
+    await refresh(); cur = S.workshops.find((w) => w.id === cur.id); renderReschedule();
+    toast(now ? 'Announcing now' : `Saved. Goes out at ${fmt12(S.rescheduleCheck)}`);
+  });
+}
+async function cancelReschedule() {
+  await busy(null, async () => {
+    await api(`/api/workshops/${cur.id}/reschedule`, { method: 'DELETE' });
+    await refresh(); cur = S.workshops.find((w) => w.id === cur.id); renderReschedule(); toast('Reschedule cancelled');
+  });
+}
+
+async function loadGroups() {
+  const acc = $('f_account').value;
+  if (!acc) { allGroups = []; renderGroups(); return; }
+  $('groups').innerHTML = '<div class="empty">Loading groups…</div>';
+  try { allGroups = await api(`/api/accounts/${acc}/groups`); }
+  catch (e) { allGroups = []; $('groups').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  renderGroups();
+}
+function renderGroups() {
+  const q = $('gSearch').value.toLowerCase();
+  const known = new Map(allGroups.map((g) => [g.jid, g]));
+  const list = [...[...picked.values()].filter((g) => !known.has(g.jid)), ...allGroups];
+  const shown = list.filter((g) => g.name?.toLowerCase().includes(q)).sort((a, b) => picked.has(b.jid) - picked.has(a.jid));
+  $('gCount').textContent = `${picked.size} selected`;
+  $('groups').innerHTML = shown.length ? shown.map((g) => {
+    const off = g.canPost === false && !picked.has(g.jid);
+    return `<label class="g ${off ? 'disabled' : ''}"><input type="checkbox" ${picked.has(g.jid) ? 'checked' : ''} ${off ? 'disabled' : ''} onchange="toggleG('${g.jid}',this.checked)">
+      <span class="grow">${esc(g.name)}</span>
+      ${g.community ? '<span class="pill">Community</span>' : ''}
+      ${g.adminOnly ? `<span class="pill ${g.canPost ? '' : 'bad'}">${g.canPost ? 'Admin-only' : "Can't post"}</span>` : ''}
+      ${g.size ? `<span class="small muted">${g.size}</span>` : ''}</label>`;
+  }).join('') : '<div class="empty">No groups</div>';
+  $('testJid').innerHTML = list.map((g) => `<option value="${g.jid}">${esc(g.name)}</option>`).join('');
+}
+function toggleG(jid, on) { const g = allGroups.find((x) => x.jid === jid) || picked.get(jid); on ? picked.set(jid, { jid, name: g.name }) : picked.delete(jid); $('gCount').textContent = `${picked.size} selected`; }
+
+async function preview(phase) {
+  await busy(null, async () => {
+    await saveWorkshop(true);
+    $('pv').innerHTML = '<div class="empty">Writing…</div>';
+    const body = { phase, date: $('r_date').value, startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value };
+    const r = await api(`/api/workshops/${cur.id}/preview`, { method: 'POST', body });
+    pvText = r.text;
+    $('pv').innerHTML = `<div class="preview">${esc(r.text)}</div>`;
+    $('pvMeta').textContent = r.source === 'ai' ? `Written by Claude, passed checks (attempt ${r.attempts})` : `Safe template used: ${r.error}`;
+    $('testRow').hidden = !$('testJid').options.length;
+    $('pv').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }).catch(() => { $('pv').innerHTML = ''; });
+}
+async function sendTest() { await busy(null, async () => { await api(`/api/workshops/${cur.id}/test`, { method: 'POST', body: { jid: $('testJid').value, text: pvText } }); toast('Sent to that group'); }); }
+
+const editor = $('editor'), progDlg = $('progDlg');
+refresh(); setInterval(() => { if (!editor.open && !progDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);
+</script>
+</body>
+</html>
