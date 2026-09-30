@@ -38,6 +38,19 @@ const names = reloaded.db().programmes.map((p) => p.name);
 assert.ok(!names.includes('Deepak Crypto'), 'deleted seed not re-added');
 assert.ok(!names.includes('BO Akshat'), 'renamed seed not duplicated');
 assert.equal(names.length, 9);
+assert.equal(reloaded.db().programmes.find((p) => p.name === 'Deepak Crypto' || p.name === 'Aarzoo Personal Finance').signature, '*Team Aarzoo Shah*\nwww.aarzooshah.com', 'seed signature');
+
+// Older data (no signature field) gets the seed signature once; an edited one is kept
+{
+  const prog = reloaded.db().programmes.find((p) => p.name === 'BO Chirag');
+  prog.signature = '*Custom*';
+  const other = reloaded.db().programmes.find((p) => p.name === 'Siddharth Ecom');
+  delete other.signature;
+  reloaded.save();
+  const again = await import('../src/db.js?restart2');
+  assert.equal(again.db().programmes.find((p) => p.name === 'BO Chirag').signature, '*Custom*');
+  assert.equal(again.db().programmes.find((p) => p.name === 'Siddharth Ecom').signature, '*Team Siddharth Kapoor*');
+}
 
 console.log('Safety tests passed ✓');
 process.exit(0);

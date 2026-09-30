@@ -77,7 +77,7 @@ export async function runSend(ws, phase, date, key) {
   if (!rec) {
     const previous = d.history[ws.id] || [];
     const out = await composeMessage(r, phase, previous);
-    rec = newRecord(ws, key, date, phase, withLinks(out.text, ws, phase), out);
+    rec = newRecord(ws, key, date, phase, withLinks(out.text, r, phase), out);
     d.history[ws.id] = [...previous, out.text].slice(-12);
     save();
   }
@@ -107,7 +107,7 @@ export async function runReschedule(ws, date) {
   Object.assign(ws, { date: next.date, startTime: next.startTime, timeLabel: next.timeLabel });
   ws.reschedules = [...(ws.reschedules || []), { from: old.date, to: next.date, at: new Date().toISOString() }];
   delete ws.pendingReschedule;
-  const rec = newRecord(ws, `${ws.id}|${date}|reschedule`, date, 'reschedule', withLinks(out.text, ws, 'reschedule'), out);
+  const rec = newRecord(ws, `${ws.id}|${date}|reschedule`, date, 'reschedule', withLinks(out.text, r, 'reschedule'), out);
   rec.fromDate = old.date;
   d.history[ws.id] = [...(d.history[ws.id] || []), out.text].slice(-12);
   save();

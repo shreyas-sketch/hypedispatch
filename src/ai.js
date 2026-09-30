@@ -104,9 +104,10 @@ Hard rules:
 - Every fact must come from the FACT SHEET. Do not invent numbers, results, testimonials, bonuses, scarcity, prices, names or claims. If unsure, leave it out.
 - Never write URLs or links.
 - Only use numbers that appear in the fact sheet.
-- 40 to 90 words. 2-4 short lines/paragraphs.
+- 70 to 110 words, in 3-5 short paragraphs (blank line between them) so it reads easily on a phone.
 - Tone: exciting, warm, a bit casual, like a friendly host. Not corporate, not salesy, no ALL CAPS shouting.
-- 1-3 emojis max. WhatsApp *bold* allowed once or twice.
+- Use 3-5 emojis that fit the content, spread through the message (e.g. at the start of the opening line and of a paragraph or two). WhatsApp *bold* allowed once or twice.
+- Do not sign off or add a name at the end: the team signature is added automatically.
 - Must be clearly different from the previous messages (different opening, angle and structure).
 - Output only the message text.`;
 
@@ -152,8 +153,11 @@ export function validate(msg, ws, phase) {
   if (!msg) return ['empty message'];
   if (/https?:\/\/|www\.|\.com\b|\.in\b|zoom\.us/i.test(msg)) issues.push('it contains a link');
   const words = msg.split(/\s+/).length;
-  if (words < 25) issues.push('too short');
-  if (words > 130) issues.push('too long');
+  if (words < 55) issues.push(`too short (${words} words, aim for 70-110)`);
+  if (words > 140) issues.push(`too long (${words} words, aim for 70-110)`);
+  const emojis = (msg.match(/\p{Extended_Pictographic}/gu) || []).length;
+  if (emojis < 2) issues.push('use 3-5 emojis');
+  if (emojis > 7) issues.push('too many emojis, use 3-5');
   if (phase === 'hype' && COUNTDOWN.test(msg)) issues.push('it reads like a countdown');
 
   const src = sourceText(ws);
@@ -200,22 +204,27 @@ export function fallback(ws, phase) {
   const title = f.title || ws.name;
   const when = f.time_text || '';
   const day = f.date_text || prettyDate(ws.date);
-  const learn = f.what_youll_learn?.[0] || f.outcomes?.[0];
+  const at = `${day}${when ? `, ${when}` : ''}`;
+  // Only facts from the fact sheet, never anything made up
+  const points = [...(f.what_youll_learn || []), ...(f.outcomes || [])].filter(Boolean).slice(0, 2);
+  const list = points.length ? `\n\n${points.map((x) => `👉 ${x}`).join('\n')}` : '';
+  const forWho = f.who_its_for?.[0] ? `\n\n🙌 Made for: ${f.who_its_for[0]}` : '';
+  const host = f.host ? ` with *${f.host}*` : '';
   if (phase === 'tomorrow') {
-    return `🔥 It's dropping *tomorrow*!\n\n*${title}* goes live ${day}${when ? `, ${when}` : ''}. Block your calendar now.${linkLine(ws, phase)}`;
+    return `🔥 It's dropping *tomorrow*!\n\n*${title}*${host} goes live ${at}.${list ? ` Here's a taste of what's coming:${list}` : ''}\n\nBlock your calendar now and keep your notebook ready ✍️ We can't wait to see you there!${linkLine(ws, phase)}`;
   }
   if (phase === 'reschedule') {
-    return `📅 *Change of date*\n\n*${title}* is now on *${day}${when ? `, ${when}` : ''}* (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''}). Sorry for the shuffle!\n\nPlease update your calendar. Everything else stays the same, and we can't wait to see you there.${linkLine(ws, phase)}`;
+    return `📅 *Change of date*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}. Sorry for the shuffle! 🙏\n\nPlease update your calendar. Everything else stays exactly the same${list ? `:${list}` : '.'}\n\nWe can't wait to see you there ✨${linkLine(ws, phase)}`;
   }
   if (phase === 'dayof') {
-    return `🚀 *Today's the day!*\n\n*${title}* is live${when ? ` at ${when}` : ' today'}. Grab a notebook and join on time.${linkLine(ws, phase)}`;
+    return `🚀 *Today's the day!*\n\n*${title}*${host} is live${when ? ` at ${when}` : ' today'}.${list ? ` Here's what we're getting into:${list}` : ''}\n\nGrab a notebook, find a quiet spot and join on time so you don't miss the start ⏰ See you there!${linkLine(ws, phase)}`;
   }
-  return `✨ Getting ready for *${title}*!${learn ? `\n\nOne thing we'll dive into: ${learn}.` : ''}\n\nSee you on ${day}${when ? `, ${when}` : ''}. It's going to be a good one.${linkLine(ws, phase)}`;
+  return `✨ Getting ready for *${title}*${host}!${points.length ? '\n\nHere\'s a little of what we\'ll dive into:' : ''}${list}${forWho}\n\nSee you on ${at} 📅 It's going to be a good one!${linkLine(ws, phase)}`;
 }
 
 // Links are always added by code, never written by the AI
 export function withLinks(msg, ws, phase) {
-  return [msg.trim(), ...linksFor(ws, phase).map((l) => `${l.label}: ${l.url}`)].join('\n\n');
+  return [msg.trim(), ...linksFor(ws, phase).map((l) => `${l.label}: ${l.url}`), ws.signature?.trim()].filter(Boolean).join('\n\n');
 }
 
 // Full pipeline: up to 3 AI attempts, then fallback

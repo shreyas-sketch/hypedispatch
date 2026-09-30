@@ -22,7 +22,7 @@ export function resolve(ws, old = null) {
     factSheet.old_date_text = prettyDate(old.date);
     factSheet.old_time_text = old.timeLabel || '';
   }
-  return { ...ws, name: ws.name || prog.name, factSheet };
+  return { ...ws, name: ws.name || prog.name, signature: prog.signature || '', factSheet };
 }
 
 export function displayName(ws) {

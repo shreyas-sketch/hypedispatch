@@ -44,6 +44,7 @@ button.small{padding:5px 10px;font-size:12px}
 button:disabled{opacity:.5;cursor:wait}
 input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
 textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+textarea.plain{min-height:0;font:inherit}
 label{display:grid;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
 .form{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .form .span2{grid-column:span 2}.form .span4{grid-column:span 4}
@@ -192,6 +193,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
       <label class="span2">Name<input id="p_name" autofocus></label>
       <label class="span2">Landing page URL<input id="p_landingUrl"></label>
       <label class="span4">Focus (optional, if the page has more than one offer)<input id="p_focus" placeholder="e.g. The AI for business owners masterclass only"></label>
+      <label class="span4">Signature <span class="muted" style="font-weight:400">(added at the very end of every message, after the links. *text* = bold)</span><textarea id="p_signature" class="plain" rows="2" placeholder="*Team Akshat Dani*&#10;akshatdani.com"></textarea></label>
     </div>
     <div class="section">
       <h4>Fact sheet</h4>
@@ -384,7 +386,7 @@ function renderWeek() {
 function renderProgs() {
   $('progs').innerHTML = S.programmes.map((p) => `
     <div class="prog">
-      <div class="grow"><div style="font-weight:600">${esc(p.name)}</div><a href="${esc(p.landingUrl)}" target="_blank">${esc(p.landingUrl)}</a></div>
+      <div class="grow"><div style="font-weight:600">${esc(p.name)}${p.signature ? ` <span class="small muted" style="font-weight:400">· signs off as ${esc(p.signature.split('\n')[0].replace(/\*/g, ''))}</span>` : ''}</div><a href="${esc(p.landingUrl)}" target="_blank">${esc(p.landingUrl)}</a></div>
       ${p.factSheet ? `<span class="pill ok">Fact sheet ready</span>` : `<span class="pill bad">Not built</span>`}
       <button class="small" onclick="openProg('${p.id}')">${p.factSheet ? 'View' : 'Build'}</button>
     </div>`).join('');
@@ -435,14 +437,14 @@ function openProg(id) {
   const p = curProg || {};
   $('pTitle').textContent = p.name || 'New programme';
   $('pDel').hidden = !curProg;
-  $('p_name').value = p.name || ''; $('p_landingUrl').value = p.landingUrl || ''; $('p_focus').value = p.focus || '';
+  $('p_name').value = p.name || ''; $('p_landingUrl').value = p.landingUrl || ''; $('p_focus').value = p.focus || ''; $('p_signature').value = p.signature || '';
   $('p_factSheet').value = p.factSheet ? JSON.stringify(p.factSheet, null, 2) : '';
   $('pasted').value = ''; $('pasteWrap').hidden = true;
   renderFacts(p.factSheet);
   progDlg.showModal();
 }
 async function saveProg(silent) {
-  const body = { name: $('p_name').value, landingUrl: $('p_landingUrl').value, focus: $('p_focus').value };
+  const body = { name: $('p_name').value, landingUrl: $('p_landingUrl').value, focus: $('p_focus').value, signature: $('p_signature').value };
   const fs = $('p_factSheet').value.trim();
   if (fs) { try { body.factSheet = JSON.parse(fs); } catch { throw new Error('Fact sheet JSON has a typo'); } }
   curProg = curProg ? await api('/api/programmes/' + curProg.id, { method: 'PUT', body }) : await api('/api/programmes', { method: 'POST', body });

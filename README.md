@@ -89,6 +89,8 @@ To change the check time, set `RESCHEDULE_CHECK_TIME=19:00` in `.env`.
 - Links, countdown wording ("3 days left"), and messages that are too short or too long are rejected.
 - A rejected draft is rewritten up to twice with the reason. If it still fails, a fixed template built from the fact sheet goes out instead (marked "safe template" in the dashboard).
 - Form and Zoom links are inserted by code, never written by AI.
+- Each programme has its own **signature** (e.g. `*Team Akshat Dani*` + `akshatdani.com`), added by code as the last lines of every message. Edit it under **Programmes → View**.
+- Messages aim for 70–110 words with 3–5 emojis. A draft that's too short or has no emojis is sent back to Claude to rewrite.
 
 ## Good to know
 

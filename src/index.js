@@ -79,12 +79,12 @@ app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await list
 
 // ----- programmes (one per landing page) -----
 app.post('/api/programmes', wrap((req, res) => {
-  const p = { id: newId(), name: req.body.name || 'New programme', landingUrl: req.body.landingUrl || '', focus: req.body.focus || '', factSheet: null };
+  const p = { id: newId(), name: req.body.name || 'New programme', landingUrl: req.body.landingUrl || '', focus: req.body.focus || '', signature: req.body.signature || '', factSheet: null };
   db().programmes.push(p); save(); res.json(p);
 }));
 app.put('/api/programmes/:id', wrap((req, res) => {
   const p = findProg(req.params.id);
-  for (const k of ['name', 'landingUrl', 'focus', 'factSheet']) if (k in req.body) p[k] = req.body[k];
+  for (const k of ['name', 'landingUrl', 'focus', 'signature', 'factSheet']) if (k in req.body) p[k] = req.body[k];
   save(); res.json({ ...p, pageText: undefined });
 }));
 app.delete('/api/programmes/:id', wrap((req, res) => {
@@ -159,7 +159,7 @@ app.post('/api/workshops/:id/preview', wrap(async (req, res) => {
   } else r = resolve(ws);
   if (!r) throw new Error("This programme's fact sheet isn't built yet");
   const out = await composeMessage(r, phase, db().history[ws.id] || []);
-  res.json({ ...out, text: withLinks(out.text, ws, phase) });
+  res.json({ ...out, text: withLinks(out.text, r, phase) });
 }));
 
 // Send a preview to one chat (e.g. your own test group) to see it in WhatsApp

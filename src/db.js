@@ -24,6 +24,11 @@ export function db() {
     if (!cache.programmes.some((x) => x.name === p.name)) cache.programmes.push({ id: newId(), ...p, factSheet: null });
     cache.seeded.push(p.name);
   }
+  // Give existing seed programmes their signature once (a signature you've edited or cleared is kept)
+  for (const p of SEED_PROGRAMMES) {
+    const prog = cache.programmes.find((x) => x.name === p.name);
+    if (prog && prog.signature === undefined) prog.signature = p.signature;
+  }
   return cache;
 }
 

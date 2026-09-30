@@ -16,8 +16,8 @@ const fake = http.createServer((req, res) => {
     const user = j.messages[0].content;
     const fs_ = JSON.parse(user.match(/FACT SHEET:\n([\s\S]*?)\n\n(?:The workshop|TASK)/)[1]);
     const text = user.includes('RESCHEDULED')
-      ? `Quick change, friends! *${fs_.title}* is moving to ${fs_.date_text}, ${fs_.time_text} (it was ${fs_.old_date_text}). Sorry for the shuffle. Please update your calendar, because everything we planned is still coming your way and it's going to be worth it.`
-      : `Getting so excited for *${fs_.title}* on ${fs_.date_text} at ${fs_.time_text}! We're going deep on real, practical stuff you can actually use the very next day. Bring your questions, bring your curiosity, and let's make it a great session together.`;
+      ? `📅 Quick change, friends! *${fs_.title}* is moving to ${fs_.date_text}, ${fs_.time_text} (it was ${fs_.old_date_text}). Sorry for the shuffle.\n\n🙏 Please update your calendar, because everything we planned is still coming your way and it's going to be worth every minute you spend with us.\n\nSame energy, same content, same excitement, just a new slot on the calendar. We really can't wait to see you all there ✨`
+      : `🔥 Getting so excited for *${fs_.title}* on ${fs_.date_text} at ${fs_.time_text}! We're going deep on real, practical stuff you can actually use the very next day.\n\n💡 Bring your questions, bring your curiosity, and bring that one problem you have been stuck on for a while now.\n\nLet's make it a great session together, one where you walk away with clarity and a plan you can start on straight away ✨`;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model: j.model, content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }));
   });
@@ -60,6 +60,8 @@ await at('2026-10-01T18:59:00'); assert.equal(dryRunSent.length, 2, 'not before 
 await at('2026-10-01T19:00:00'); assert.equal(dryRunSent.length, 4, 'reschedule announced at 7 PM');
 const ann = dryRunSent[2].text;
 assert.ok(ann.includes('https://forms.gle/x') && !ann.includes('zoom.us'), 'reschedule has form link, no Zoom');
+assert.ok(ann.endsWith('*Team Akshat Dani*'), 'signature last');
+assert.ok(d.sends.every((s) => s.source === 'ai'), 'fake Claude drafts pass the checks');
 assert.ok(ann.includes('Tuesday, 6 October') && ann.includes('8 PM IST') && ann.includes('Sunday, 4 October'), ann);
 assert.equal(d.workshops[0].date, '2026-10-06');
 assert.ok(!d.workshops[0].pendingReschedule);
