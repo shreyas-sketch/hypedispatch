@@ -29,6 +29,14 @@ assert.deepEqual(validate('1️⃣ ' + good, ws, 'hype'), [], 'keycap emoji igno
 
 assert.ok(validate(good.replace('Sunday', 'Saturday'), ws, 'hype').some((i) => i.includes('saturday')), 'wrong weekday caught');
 
+// Numbers must match whole: "10" is not accepted because the fact sheet says "100"
+const ws100 = { ...ws, factSheet: { ...ws.factSheet, other_key_facts: ['100+ students trained'] } };
+assert.ok(validate(good.replace('3 AI', '10 AI'), ws100, 'hype').some((i) => i.includes('"10"')), 'part of a bigger number is not enough');
+assert.deepEqual(validate(good.replace('3 AI', '100 AI'), ws100, 'hype'), [], 'exact number allowed');
+const wsPrice = { ...ws, factSheet: { ...ws.factSheet, price_text: '₹1,999', list: [1, 2] } };
+assert.deepEqual(validate(good + ' Just 1999.', wsPrice, 'hype'), [], '1,999 and 1999 match');
+assert.ok(validate(good.replace('3 AI', '12 AI'), wsPrice, 'hype').some((i) => i.includes('"12"')), 'numeric array [1,2] is not read as 12');
+
 // Links added by code only
 assert.ok(withLinks('x', ws, 'tomorrow').includes(ws.formLink) && withLinks('x', ws, 'tomorrow').includes(ws.zoomLink));
 assert.ok(!withLinks('x', ws, 'hype').includes('http'));
@@ -40,8 +48,9 @@ for (const p of ['hype', 'tomorrow', 'dayof']) {
   assert.ok(f.includes('AI Income Workshop'), p);
 }
 
-// With a bad key, pipeline falls back instead of crashing
+// With a bad key / unreachable API, pipeline falls back instead of crashing (offline, so the test is fast)
 process.env.ANTHROPIC_API_KEY = 'sk-bad';
+process.env.ANTHROPIC_BASE_URL = 'http://127.0.0.1:9';
 const out = await composeMessage(ws, 'tomorrow', []);
 assert.equal(out.source, 'fallback');
 

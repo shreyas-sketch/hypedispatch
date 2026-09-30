@@ -9,11 +9,17 @@ const MSG_MODEL = process.env.MSG_MODEL || 'claude-haiku-4-5-20251001';
 let client;
 const ai = () => (client ||= new Anthropic()); // reads ANTHROPIC_API_KEY
 
-const textOf = (res) => res.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+const textOf = (res) => {
+  if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
+  if (res.stop_reason === 'max_tokens') throw new Error('Claude ran out of room before finishing');
+  return res.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+};
 
 // ---------- 1. Read the landing page ----------
 export async function fetchPageText(url) {
+  if (!/^https?:\/\//i.test(url || '')) throw new Error('Add the landing page URL first (starting with https://)');
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(30_000),
     headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36' },
   });
   if (!res.ok) throw new Error(`Landing page returned ${res.status}`);
@@ -62,7 +68,7 @@ const FACT_SHAPE = `{
 export async function extractFacts(pageText, focus = '') {
   const res = await ai().messages.create({
     model: FACT_MODEL,
-    max_tokens: 2000,
+    max_tokens: 16000, // Sonnet 5.5 thinks by default and that counts against this
     system: FACT_SYSTEM,
     messages: [{
       role: 'user',
@@ -70,7 +76,11 @@ export async function extractFacts(pageText, focus = '') {
     }],
   });
   const raw = textOf(res).replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-  return JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+  try {
+    return JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+  } catch {
+    throw new Error('Claude did not return a readable fact sheet. Try again.');
+  }
 }
 
 // ---------- 3. Write today's message ----------
@@ -106,7 +116,8 @@ export async function draftMessage(ws, phase, previous = [], feedback = '') {
   const res = await ai().messages.create({
     model: MSG_MODEL,
     max_tokens: 400,
-    temperature: 0.9,
+    // Newer Sonnet/Opus models reject custom temperature; only send it to Haiku
+    ...(/haiku/i.test(MSG_MODEL) ? { temperature: 0.9 } : {}),
     system: MSG_SYSTEM,
     messages: [{
       role: 'user',
@@ -128,8 +139,14 @@ const COUNTDOWN = new RegExp(`\\b(?:\\d+|${WORD_NUM})\\s+(?:more\\s+)?days?\\s+(
 
 export function sourceText(ws) {
   // Only the fact sheet (with this run's date/time) counts, never the raw page, whose dates are often stale
-  return JSON.stringify(ws.factSheet || {}).toLowerCase();
+  const out = [];
+  const walk = (v) => { if (v == null) return; if (typeof v === 'object') Object.values(v).forEach(walk); else out.push(String(v)); };
+  walk(ws.factSheet || {});
+  return out.join('\n').toLowerCase();
 }
+
+// Whole numbers as written ("1,999" and "1999" count as the same). Keycap emoji like 1️⃣ are ignored.
+const numbersIn = (s) => (s.replace(/[0-9]\uFE0F?\u20E3/g, '').match(/\d+(?:[.,:]\d+)*/g) || []).map((n) => n.replace(/,/g, ''));
 
 export function validate(msg, ws, phase) {
   const issues = [];
@@ -141,9 +158,10 @@ export function validate(msg, ws, phase) {
   if (phase === 'hype' && COUNTDOWN.test(msg)) issues.push('it reads like a countdown');
 
   const src = sourceText(ws);
-  const nums = (msg.replace(/[0-9]️?⃣/g, '').match(/\d+(?:[.,:]\d+)*/g)) || [];
-  for (const n of new Set(nums)) {
-    if (!src.includes(n)) issues.push(`the number "${n}" is not on the landing page`);
+  // Whole-number match, so "10" isn't accepted just because the fact sheet says "100"
+  const srcNums = new Set(numbersIn(src));
+  for (const n of new Set(numbersIn(msg))) {
+    if (!srcNums.has(n)) issues.push(`the number "${n}" is not on the landing page`);
   }
   // Day and month names must also match (catches "Saturday" when it's a Sunday)
   const CAL = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/gi;

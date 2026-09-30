@@ -2,15 +2,18 @@
   "name": "hype-dispatch",
   "version": "1.0.0",
   "description": "Auto hype reminders for workshop WhatsApp communities",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test/logic.test.js && node test/scheduler.test.js && node test/safety.test.js",
     "start": "node src/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
     "@whiskeysockets/baileys": "^6.7.24",

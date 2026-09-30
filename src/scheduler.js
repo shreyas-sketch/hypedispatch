@@ -8,6 +8,7 @@ import { sendText, sleep } from './wa.js';
 import { resolve, timeLabelOf, displayName } from './workshop.js';
 
 const running = new Set();
+const warned = new Set(); // problems already logged today, so the minute-by-minute check doesn't flood the log
 const GAP_MIN = Number(process.env.GROUP_GAP_MIN_MS || 4000);
 const GAP_MAX = Number(process.env.GROUP_GAP_MAX_MS || 7000);
 export const RESCHEDULE_CHECK = () => process.env.RESCHEDULE_CHECK_TIME || '19:00';
@@ -15,6 +16,12 @@ export const RESCHEDULE_CHECK = () => process.env.RESCHEDULE_CHECK_TIME || '19:0
 export function startScheduler() {
   setInterval(() => tick().catch((e) => log('error', `Scheduler: ${e.message}`)), 60_000);
   setTimeout(() => tick().catch(() => {}), 15_000); // catch up shortly after boot
+}
+
+function warnOnce(key, level, msg) {
+  if (warned.has(key)) return;
+  warned.add(key);
+  log(level, msg);
 }
 
 function launch(key, fn, label) {
@@ -51,6 +58,7 @@ export async function tick(now = new Date()) {
     if (!phase) continue;
     if (hm < sendTimeFor(ws, phase)) continue;
     if (phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // already started
+    if (!ws.groups?.length) { warnOnce(`${ws.id}|${date}|nogroups`, 'warn', `${name}: no groups selected, today's ${phase} message was not sent`); continue; }
     const key = `${ws.id}|${date}|${phase}`;
     if (d.sends.find((s) => s.key === key)?.done) continue;
     launch(key, () => runSend(ws, phase, date, key), name);
@@ -62,8 +70,8 @@ export async function runSend(ws, phase, date, key) {
   const d = db();
   const name = displayName(ws);
   const r = resolve(ws);
-  if (!r) { log('error', `${name}: its programme has no fact sheet yet, skipped the ${phase} message`); return; }
-  if (!ws.groups?.length) { log('warn', `${name}: no groups selected`); return; }
+  if (!r) { warnOnce(`${key}|nofacts`, 'error', `${name}: its programme has no fact sheet yet, skipped the ${phase} message`); return; }
+  if (!ws.groups?.length) return;
 
   let rec = d.sends.find((s) => s.key === key);
   if (!rec) {
@@ -90,7 +98,7 @@ export async function runReschedule(ws, date) {
     timeLabel: pr.timeLabel || (pr.startTime ? '' : ws.timeLabel), // blank = derived from startTime
   };
   const r = resolve(next, old);
-  if (!r) { log('error', `${name}: its programme has no fact sheet yet, can't announce the reschedule`); return; }
+  if (!r) { warnOnce(`${ws.id}|${date}|reschedule|nofacts`, 'error', `${name}: its programme has no fact sheet yet, can't announce the reschedule`); return; }
 
   const out = await composeMessage(r, 'reschedule', d.history[ws.id] || []);
 

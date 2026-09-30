@@ -15,9 +15,12 @@ export function db() {
   cache = fs.existsSync(FILE)
     ? { ...structuredClone(EMPTY), ...JSON.parse(fs.readFileSync(FILE, 'utf8')) }
     : structuredClone(EMPTY);
-  // Add any seed programme that isn't there yet (matched by name)
+  // Add each seed programme once. Remember which were added so a renamed or deleted one doesn't come back.
+  cache.seeded ||= [];
   for (const p of SEED_PROGRAMMES) {
+    if (cache.seeded.includes(p.name)) continue;
     if (!cache.programmes.some((x) => x.name === p.name)) cache.programmes.push({ id: newId(), ...p, factSheet: null });
+    cache.seeded.push(p.name);
   }
   return cache;
 }

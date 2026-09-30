@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { db, save, newId, log } from './db.js';
 import { startAccount, accountStatus, listGroups, logoutAccount, sendText } from './wa.js';
 import { fetchPageText, extractFacts, composeMessage, withLinks } from './ai.js';
@@ -16,15 +17,19 @@ const PASS = process.env.DASHBOARD_PASSWORD;
 if (PASS) {
   app.use((req, res, next) => {
     const [, b64] = (req.headers.authorization || '').split(' ');
-    const [, pw] = Buffer.from(b64 || '', 'base64').toString().split(':');
-    if (pw === PASS) return next();
+    const creds = Buffer.from(b64 || '', 'base64').toString();
+    const pw = creds.slice(creds.indexOf(':') + 1); // passwords may contain ':'
+    if (creds.includes(':') && pw === PASS) return next();
     res.set('WWW-Authenticate', 'Basic realm="Hype Dispatch"').status(401).send('Password required');
   });
 }
-app.use(express.static(path.resolve('public')));
+app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')));
 
-const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((e) => res.status(400).json({ error: e.message }));
+// Promise.resolve().then() so synchronous throws also come back as { error } instead of an HTML stack trace
+const wrap = (fn) => (req, res) => Promise.resolve().then(() => fn(req, res)).catch((e) => res.status(400).json({ error: e.message }));
 const findWs = (id) => { const w = db().workshops.find((x) => x.id === id); if (!w) throw new Error('Workshop not found'); return w; };
+// Only ids we created are allowed near the file system (auth folders are deleted by id)
+const findAcc = (id) => { const a = db().accounts.find((x) => x.id === id); if (!a) throw new Error('WhatsApp number not found'); return a; };
 const findProg = (id) => { const p = db().programmes.find((x) => x.id === id); if (!p) throw new Error('Programme not found'); return p; };
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 
@@ -52,13 +57,13 @@ app.post('/api/accounts', wrap(async (req, res) => {
   await startAccount(acc.id);
   res.json(acc);
 }));
-app.post('/api/accounts/:id/connect', wrap(async (req, res) => { await startAccount(req.params.id); res.json({ ok: true }); }));
+app.post('/api/accounts/:id/connect', wrap(async (req, res) => { await startAccount(findAcc(req.params.id).id); res.json({ ok: true }); }));
 app.delete('/api/accounts/:id', wrap(async (req, res) => {
-  await logoutAccount(req.params.id);
+  await logoutAccount(findAcc(req.params.id).id);
   db().accounts = db().accounts.filter((a) => a.id !== req.params.id); save();
   res.json({ ok: true });
 }));
-app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await listGroups(req.params.id))));
+app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await listGroups(findAcc(req.params.id).id))));
 
 // ----- programmes (one per landing page) -----
 app.post('/api/programmes', wrap((req, res) => {
@@ -93,6 +98,7 @@ function applyFields(ws, body) {
   for (const k of FIELDS) if (k in body) ws[k] = body[k];
   if (!isDate(ws.date)) throw new Error('Workshop date is required');
   if (!ws.programmeId) throw new Error('Pick which programme (landing page) this is');
+  if (!Array.isArray(ws.groups)) ws.groups = [];
   return ws;
 }
 app.post('/api/workshops', wrap((req, res) => {
@@ -114,6 +120,7 @@ app.post('/api/workshops/:id/reschedule', wrap((req, res) => {
   const ws = findWs(req.params.id);
   const { date, startTime, timeLabel, sendNow } = req.body;
   if (!isDate(date)) throw new Error('Pick the new date');
+  if (date < nowParts().date) throw new Error('The new date is in the past');
   if (date === ws.date && (!startTime || startTime === ws.startTime)) throw new Error('That is the same date and time');
   ws.pendingReschedule = { date, startTime: startTime || '', timeLabel: timeLabel || '', sendNow: !!sendNow, enteredDate: nowParts().date, enteredAt: new Date().toISOString() };
   save();
@@ -146,13 +153,20 @@ app.post('/api/workshops/:id/preview', wrap(async (req, res) => {
 // Send a preview to one chat (e.g. your own test group) to see it in WhatsApp
 app.post('/api/workshops/:id/test', wrap(async (req, res) => {
   const ws = findWs(req.params.id);
+  if (!req.body.jid || !req.body.text) throw new Error('Pick a group and write a preview first');
   await sendText(ws.account, req.body.jid, req.body.text);
   res.json({ ok: true });
 }));
 
+// Bad JSON bodies etc.: short JSON error, never a stack trace
+app.use((err, req, res, next) => res.status(err.status || 500).json({ error: err.expose ? err.message : 'Something went wrong' }));
+
 const PORT = Number(process.env.PORT || 4321);
-app.listen(PORT, async () => {
+// Only this PC by default. Set HOST=0.0.0.0 (plus DASHBOARD_PASSWORD) to open it to your network.
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, async () => {
   console.log(`Hype Dispatch running → http://localhost:${PORT}`);
+  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && !PASS) console.warn('Dashboard is reachable from your network with no password. Set DASHBOARD_PASSWORD in .env.');
   if (!process.env.ANTHROPIC_API_KEY) console.warn('ANTHROPIC_API_KEY is missing in .env, AI drafting will fail.');
   for (const a of db().accounts) await startAccount(a.id).catch((e) => log('error', `Start ${a.name}: ${e.message}`));
   startScheduler();

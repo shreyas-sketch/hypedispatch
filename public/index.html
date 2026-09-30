@@ -453,7 +453,7 @@ async function saveWorkshop(silent) {
     if (silent !== true) { toast(body.groups.length && body.active ? 'Saved. Auto-send is on.' : 'Saved'); editor.close(); }
   });
 }
-async function delWorkshop() { if (!confirm('Delete this workshop?')) return; await api('/api/workshops/' + cur.id, { method: 'DELETE' }); editor.close(); refresh(); }
+async function delWorkshop() { if (!confirm('Delete this workshop?')) return; await busy(null, async () => { await api('/api/workshops/' + cur.id, { method: 'DELETE' }); editor.close(); refresh(); }); }
 
 async function reschedule(now) {
   const body = { date: $('r_date').value, startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value, sendNow: now };

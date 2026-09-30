@@ -31,7 +31,7 @@ The PC must stay on and awake at send times (Settings → Power → Sleep: Never
 
 ## First time: build the 10 fact sheets
 
-All 10 landing pages are already listed under **Programmes**. For each one, press **Build → Read landing page**, then look over the fact sheet and fix anything wrong. You do this once per programme and it's reused every week. Rebuild it only if the landing page changes.
+All 10 landing pages are already listed under **Programmes** (if you delete or rename one, it stays that way). For each one, press **Build → Read landing page**, then look over the fact sheet and fix anything wrong. You do this once per programme and it's reused every week. Rebuild it only if the landing page changes.
 
 If a page won't load (some pages fill in content with JavaScript), open it in your browser, copy all the text, and use **Paste its text** instead.
 
@@ -72,5 +72,6 @@ To change the check time, set `RESCHEDULE_CHECK_TIME=19:00` in `.env`.
 - If the PC was off at send time, the message goes out as soon as it's back on the same day. A day-of message is skipped if the workshop has already started.
 - Failed groups are retried automatically, up to 3 rounds.
 - All data lives in the `data` folder, including WhatsApp logins. Don't share it.
-- Tests: `node test/logic.test.js` and `node test/scheduler.test.js`. The scheduler test runs a full week with a reschedule, using a fake Claude and no real WhatsApp.
+- The dashboard only opens on this PC by default. To use it from your phone or another computer on the same network, set `HOST=0.0.0.0` **and** `DASHBOARD_PASSWORD` in `.env`.
+- Tests: `npm test` (logic, a full-week scheduler run, and safety checks). The scheduler test runs a full week with a reschedule, using a fake Claude and no real WhatsApp.
 - Unofficial WhatsApp automation can get a number restricted, so use numbers you're prepared for that on.

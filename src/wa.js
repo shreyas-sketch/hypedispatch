@@ -10,7 +10,10 @@ import path from 'path';
 import { log } from './db.js';
 
 const sessions = new Map(); // accountId -> { sock, status, qr, me }
-const authDir = (id) => path.resolve('data', 'auth', id);
+const authDir = (id) => {
+  if (!/^[a-z0-9]+$/i.test(id || '')) throw new Error('Bad account id'); // never let an id escape data/auth
+  return path.resolve('data', 'auth', id);
+};
 
 export function accountStatus(id) {
   const s = sessions.get(id);
@@ -49,6 +52,7 @@ export async function startAccount(id) {
       log('info', `WhatsApp ${id} connected as ${s.me}`);
     }
     if (u.connection === 'close') {
+      if (sessions.get(id) !== s) return; // number was removed or replaced, don't bring it back
       const code = u.lastDisconnect?.error?.output?.statusCode;
       if (code === DisconnectReason.loggedOut) {
         s.status = 'offline';
@@ -56,17 +60,22 @@ export async function startAccount(id) {
         log('warn', `WhatsApp ${id} was logged out. Scan the QR again.`);
       } else {
         s.status = 'reconnecting';
-        setTimeout(() => { s.status = 'offline'; startAccount(id); }, 3000);
+        setTimeout(() => {
+          if (sessions.get(id) !== s) return;
+          s.status = 'offline';
+          startAccount(id).catch((e) => log('error', `WhatsApp ${id} reconnect: ${e.message}`));
+        }, 3000);
       }
     }
   });
 }
 
 export async function logoutAccount(id) {
+  const dir = authDir(id);
   const s = sessions.get(id);
-  try { await s?.sock?.logout(); } catch {}
   sessions.delete(id);
-  fs.rmSync(authDir(id), { recursive: true, force: true });
+  try { await s?.sock?.logout(); } catch {}
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 function live(id) {
