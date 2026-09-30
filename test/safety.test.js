@@ -52,5 +52,17 @@ assert.equal(reloaded.db().programmes.find((p) => p.name === 'Deepak Crypto' || 
   assert.equal(again.db().programmes.find((p) => p.name === 'Siddharth Ecom').signature, '*Team Siddharth Kapoor*');
 }
 
+// Resync: saved group names are refreshed, and groups the number has left are reported
+{
+  const { syncWorkshopGroups } = await import('../src/workshop.js');
+  d.workshops.push({ id: 'w3', programmeId: prog.id, date: '2026-10-10', account: 'acc1', groups: [{ jid: 'a@g.us', name: 'Old name' }, { jid: 'b@g.us', name: 'Left group' }] });
+  d.workshops.push({ id: 'w4', programmeId: prog.id, date: '2026-10-10', account: 'other', groups: [{ jid: 'a@g.us', name: 'Untouched' }] });
+  const r = syncWorkshopGroups('acc1', [{ jid: 'a@g.us', name: '4th Oct Consulting' }]);
+  assert.equal(r.renamed, 1);
+  assert.deepEqual(r.missing.map((m) => m.group), ['Left group']);
+  assert.equal(d.workshops.find((w) => w.id === 'w3').groups[0].name, '4th Oct Consulting');
+  assert.equal(d.workshops.find((w) => w.id === 'w4').groups[0].name, 'Untouched', 'other numbers not touched');
+}
+
 console.log('Safety tests passed ✓');
 process.exit(0);

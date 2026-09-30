@@ -241,6 +241,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
       <p class="muted small" style="margin:0 0 10px">Once you pick the community and save, messages go out automatically every day until the workshop.</p>
       <div class="row" style="margin-bottom:10px">
         <select id="f_account" style="max-width:260px" onchange="loadGroups()"></select>
+        <button class="small" id="gResync" onclick="resyncGroups()" title="Reload this number's groups from WhatsApp (use after joining a new community)">↻ Resync groups</button>
         <input id="gSearch" placeholder="Search, e.g. 4th Oct" oninput="renderGroups()" style="flex:1;min-width:160px">
         <span id="gCount" class="pill"></span>
       </div>
@@ -378,7 +379,11 @@ function renderWeek() {
       const sent = S.sends.find((s) => s.key === `${w.id}|${d}|${p}` && s.done);
       return `<td class="cell"><span class="pill ${p}">${sent ? '✓ ' : ''}${PHASE_LABEL[p]}</span><div class="t">${t || ''}</div>${p === 'dayof' ? '<div class="star">★ ' + fmt12(w.startTime) + '</div>' : ''}</td>`;
     }).join('');
-    return `<tr><td class="name" tabindex="0" role="button" title="Open to edit, reschedule or preview" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}">${esc(w.displayName)}<div class="small muted">${niceDate(w.date)} · ${esc(w.timeLabelShown)}</div><div style="margin-top:4px">${warn}</div></td>${cells}</tr>`;
+    return `<tr><td class="name" tabindex="0" role="button" title="Open to edit, reschedule or preview" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}">${esc(w.displayName)}<div class="small muted">${niceDate(w.date)} · ${esc(w.timeLabelShown)}</div><div style="margin-top:4px">${warn}</div>
+      <div class="row" style="gap:6px;margin-top:6px">
+        <button class="small" onclick="event.stopPropagation();openEditor('${w.id}')">Edit</button>
+        <button class="small" onclick="event.stopPropagation();openEditor('${w.id}','reschedule')" title="Move this workshop to a new date or time">${pr ? 'Pending reschedule' : '📅 Reschedule'}</button>
+      </div></td>${cells}</tr>`;
   }).join('');
   $('week').innerHTML = `<table><thead><tr><th>Workshop</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -402,7 +407,7 @@ function renderAccounts() {
         <div class="small muted">${a.me ? esc(a.me.split('@')[0]) : a.qr ? 'WhatsApp → Linked devices → Link a device, then scan' : ''}</div>
         <div style="margin-top:6px"><span class="pill ${cls[a.status] || ''}">${a.status}</span></div>
       </div>
-      ${a.status === 'offline' ? `<button class="small" onclick="api('/api/accounts/${a.id}/connect',{method:'POST'}).then(refresh)">Reconnect</button>` : ''}
+      ${a.status === 'scan-qr' ? '' : `<button class="small" onclick="resync('${a.id}', this)" title="Reconnect with the same login and reload groups and communities from WhatsApp">↻ Resync</button>`}
       <button class="ghost small" onclick="if(confirm('Log out and remove this number?'))api('/api/accounts/${a.id}',{method:'DELETE'}).then(refresh)">Remove</button>
     </div>`).join('') : '<div class="empty">No numbers yet. Add one and scan the QR from your phone.</div>';
 }
@@ -429,6 +434,13 @@ async function refresh() {
   renderTabs(); renderSetup(); renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
 }
 
+async function resync(id, btn) {
+  await busy(btn, async () => {
+    btn.textContent = 'Resyncing…';
+    try { const r = await api(`/api/accounts/${id}/resync`, { method: 'POST' }); toast(r.message); }
+    finally { btn.textContent = '↻ Resync'; await refresh(); }
+  });
+}
 async function addAccount() { await busy(null, async () => { await api('/api/accounts', { method: 'POST', body: { name: $('accName').value } }); $('accName').value = ''; await refresh(); }); }
 
 // ---------- programme editor ----------
@@ -497,6 +509,7 @@ function openEditor(id, focus) {
   loadGroups();
   editor.showModal();
   if (focus === 'groups') { $('secGroups').scrollIntoView({ block: 'start' }); $('f_account').focus(); }
+  if (focus === 'reschedule') { $('rsSection').scrollIntoView({ block: 'start' }); (cur?.pendingReschedule ? $('rsPending').querySelector('button') : $('r_date'))?.focus(); }
 }
 function checkFacts() {
   const p = progById($('f_programmeId').value);
@@ -569,6 +582,15 @@ async function loadGroups() {
   try { allGroups = await api(`/api/accounts/${acc}/groups`); }
   catch (e) { allGroups = []; $('groups').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
   renderGroups();
+}
+async function resyncGroups() {
+  const acc = $('f_account').value;
+  if (!acc) return toast('Pick the sending number first');
+  await busy($('gResync'), async () => {
+    $('gResync').textContent = 'Resyncing…';
+    try { const r = await api(`/api/accounts/${acc}/resync`, { method: 'POST' }); toast(r.message); await loadGroups(); }
+    finally { $('gResync').textContent = '↻ Resync groups'; }
+  });
 }
 function renderGroups() {
   const q = $('gSearch').value.toLowerCase();

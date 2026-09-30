@@ -25,6 +25,21 @@ export function resolve(ws, old = null) {
   return { ...ws, name: ws.name || prog.name, signature: prog.signature || '', factSheet };
 }
 
+// After a resync: refresh saved group names for workshops on this number, and list groups it's no longer in
+export function syncWorkshopGroups(accountId, groups) {
+  const byJid = new Map(groups.map((g) => [g.jid, g]));
+  let renamed = 0;
+  const missing = [];
+  for (const ws of db().workshops.filter((w) => w.account === accountId)) {
+    for (const g of ws.groups || []) {
+      const now = byJid.get(g.jid);
+      if (!now) missing.push({ workshop: displayName(ws), group: g.name });
+      else if (now.name && now.name !== g.name) { g.name = now.name; renamed++; }
+    }
+  }
+  return { renamed, missing };
+}
+
 export function displayName(ws) {
   const prog = programmeOf(ws);
   return ws.name || `${prog?.name || 'Workshop'} · ${ws.date}`;

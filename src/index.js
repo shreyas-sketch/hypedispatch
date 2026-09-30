@@ -3,11 +3,11 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { db, save, newId, log } from './db.js';
-import { startAccount, accountStatus, listGroups, logoutAccount, sendText } from './wa.js';
+import { startAccount, accountStatus, listGroups, logoutAccount, sendText, resyncAccount } from './wa.js';
 import { fetchPageText, extractFacts, composeMessage, withLinks } from './ai.js';
 import { startScheduler, RESCHEDULE_CHECK } from './scheduler.js';
 import { nowParts, phaseFor, prettyTime } from './time.js';
-import { resolve, timeLabelOf, displayName } from './workshop.js';
+import { resolve, timeLabelOf, displayName, syncWorkshopGroups } from './workshop.js';
 import { onRailway, storageIsTemporary, dataDir } from './paths.js';
 
 const app = express();
@@ -74,6 +74,19 @@ app.delete('/api/accounts/:id', wrap(async (req, res) => {
   await logoutAccount(findAcc(req.params.id).id);
   db().accounts = db().accounts.filter((a) => a.id !== req.params.id); save();
   res.json({ ok: true });
+}));
+app.post('/api/accounts/:id/resync', wrap(async (req, res) => {
+  const acc = findAcc(req.params.id);
+  const status = await resyncAccount(acc.id);
+  if (status === 'scan-qr') return res.json({ status, message: `${acc.name} needs to be linked again: scan the new QR` });
+  if (status !== 'connected') throw new Error(`${acc.name} couldn't reconnect (${status}). Check that the phone is online and this server has internet, then try again.`);
+  const groups = await listGroups(acc.id);
+  const { renamed, missing } = syncWorkshopGroups(acc.id, groups);
+  save();
+  const message = `${acc.name} resynced: ${groups.length} groups${renamed ? `, ${renamed} renamed` : ''}`
+    + (missing.length ? `. No longer in: ${missing.map((m) => `${m.group} (${m.workshop})`).join(', ')}` : '');
+  log(missing.length ? 'warn' : 'info', message);
+  res.json({ status, groups: groups.length, renamed, missing, message });
 }));
 app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await listGroups(findAcc(req.params.id).id))));
 

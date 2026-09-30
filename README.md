@@ -48,7 +48,7 @@ The dashboard has four tabs across the top. Each tab has its own link, so the br
 
 - **This week**: every upcoming workshop and what it sends each day. Until setup is finished, a **Getting started** checklist at the top links to each step.
 - **Programmes**: the landing pages and their fact sheets. The badge shows how many are ready (e.g. `3/10`).
-- **WhatsApp numbers**: connect or reconnect a number by scanning its QR. The badge turns red if none is connected.
+- **WhatsApp numbers**: connect a number by scanning its QR. The badge turns red if none is connected. **↻ Resync** reconnects with the same login (no QR) and reloads its groups and communities. Use it after joining a new community, or if a number seems stuck. It also updates renamed groups in your workshops and warns about groups the number has left. The workshop editor has the same button next to the group list.
 - **Sent & activity**: every message that went out, plus the activity log. A red badge appears if any group failed.
 
 Warnings on a workshop are buttons: **Fact sheet missing** opens that programme, **No community picked** opens the workshop at the community step. Click a workshop's name (or tab to it and press Enter) to edit, reschedule or preview it.
@@ -72,7 +72,7 @@ If you save after today's hype time, today's message goes out within a minute. T
 
 ## Reschedules
 
-Open the workshop → **Reschedule** → enter the new date (and new time if it changed).
+Press **📅 Reschedule** on the workshop in **This week** (or open it and scroll to Reschedule) → enter the new date (and new time if it changed).
 
 - It's announced at **7 PM IST**, the daily check, so you can still cancel until then.
 - If you enter it after 7 PM, it goes out right away.
@@ -90,6 +90,7 @@ To change the check time, set `RESCHEDULE_CHECK_TIME=19:00` in `.env`.
 - A rejected draft is rewritten up to twice with the reason. If it still fails, a fixed template built from the fact sheet goes out instead (marked "safe template" in the dashboard).
 - Form and Zoom links are inserted by code, never written by AI.
 - Each programme has its own **signature** (e.g. `*Team Akshat Dani*` + `akshatdani.com`), added by code as the last lines of every message. Edit it under **Programmes → View**.
+- Messages are written to build hype and FOMO so people show up live: a hook opening, what they'd miss, and a push to block the time. Scarcity ("limited seats", "no replay", deadlines) is only used if the landing page says it.
 - Messages aim for 70–110 words with 3–5 emojis. A draft that's too short or has no emojis is sent back to Claude to rewrite.
 
 ## Good to know

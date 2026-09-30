@@ -85,17 +85,18 @@ export async function extractFacts(pageText, focus = '') {
 
 // ---------- 3. Write today's message ----------
 const PHASE_BRIEF = {
-  hype: `A hype-building message for a workshop that is still a few days away.
-Pick ONE angle from the fact sheet (a specific thing they'll learn, an outcome, who it's for, the host, a bonus) and make people excited about it.
-Do NOT write a countdown: no "X days left", "X days to go", no day counts at all. It must feel like genuine excitement, not a timer.
-You may mention the date/time casually if it fits.`,
-  tomorrow: `The workshop is TOMORROW. "It's dropping tomorrow" energy.
-Mention it's tomorrow and the time (from the fact sheet). Tease 1-2 things they'll get.`,
-  dayof: `The workshop is TODAY. "We're live today" energy.
-Mention the time (from the fact sheet). Remind them to show up on time and be ready.`,
+  hype: `A hype-building, FOMO-inducing message for a workshop that is still a few days away.
+Pick ONE angle from the fact sheet (a specific thing they'll learn, an outcome, who it's for, the host, a bonus) and make people feel they'd be missing out big if they weren't there.
+Open with a hook line that stops the scroll. Close with a push to lock in the date and show up live.
+Do NOT write a countdown: no "X days left", "X days to go", no day counts at all. Build urgency through what's at stake, not a timer.
+Mention the date and time so they can block it.`,
+  tomorrow: `The workshop is TOMORROW. Peak "it's dropping tomorrow, don't miss this" energy.
+Mention it's tomorrow and the time (from the fact sheet). Tease 1-2 specific things they'll get, and make it clear that the people who show up live tomorrow get the most out of it. Tell them to set a reminder now.`,
+  dayof: `The workshop is TODAY. "We go live in a few hours, this is it" energy.
+Mention the time (from the fact sheet). Make it feel like an event they can't afford to skip: remind them what they'll walk away with, and push them to join on time because the start matters.`,
   reschedule: `The workshop has been RESCHEDULED from old_date_text/old_time_text to the new date_text/time_text in the fact sheet.
 Announce the new date and time clearly in the first line. Brief, warm apology for the change (one short phrase, no reason given, never invent a reason).
-Keep the excitement: remind them of one thing they'll get. Tell them to update their calendar.`,
+Then turn it into more hype: remind them of one thing they'll get and that the new date is the one not to miss. Tell them to update their calendar right now.`,
 };
 
 const MSG_SYSTEM = `You write WhatsApp community messages for a live online workshop.
@@ -105,7 +106,10 @@ Hard rules:
 - Never write URLs or links.
 - Only use numbers that appear in the fact sheet.
 - 70 to 110 words, in 3-5 short paragraphs (blank line between them) so it reads easily on a phone.
-- Tone: exciting, warm, a bit casual, like a friendly host. Not corporate, not salesy, no ALL CAPS shouting.
+- Goal: get as many people as possible to actually show up LIVE. Every message should build hype and a real fear of missing out.
+- Tone: high-energy, urgent, exciting and personal, like a host who can't wait for this. Short punchy lines. Not corporate, no ALL CAPS shouting.
+- FOMO techniques to use (truthfully): paint the "after" picture of what attendees walk away with, contrast people who show up with people who hear about it later, make it feel like a moment you'd regret missing, end with a clear push to block the time and be there live.
+- Scarcity, limited seats, "no replay", deadlines or bonuses only for live attendees: use them ONLY if the fact sheet says so (then lean into them hard). Never make them up.
 - Use 3-5 emojis that fit the content, spread through the message (e.g. at the start of the opening line and of a paragraph or two). WhatsApp *bold* allowed once or twice.
 - Do not sign off or add a name at the end: the team signature is added automatically.
 - Must be clearly different from the previous messages (different opening, angle and structure).
@@ -211,15 +215,15 @@ export function fallback(ws, phase) {
   const forWho = f.who_its_for?.[0] ? `\n\n🙌 Made for: ${f.who_its_for[0]}` : '';
   const host = f.host ? ` with *${f.host}*` : '';
   if (phase === 'tomorrow') {
-    return `🔥 It's dropping *tomorrow*!\n\n*${title}*${host} goes live ${at}.${list ? ` Here's a taste of what's coming:${list}` : ''}\n\nBlock your calendar now and keep your notebook ready ✍️ We can't wait to see you there!${linkLine(ws, phase)}`;
+    return `🔥 It's dropping *tomorrow*!\n\n*${title}*${host} goes live ${at}.${list ? ` Here's a taste of what's coming:${list}` : ''}\n\nSet a reminder right now ⏰ The people who show up live get the most out of it, don't be the one who hears about it later!${linkLine(ws, phase)}`;
   }
   if (phase === 'reschedule') {
-    return `📅 *Change of date*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}. Sorry for the shuffle! 🙏\n\nPlease update your calendar. Everything else stays exactly the same${list ? `:${list}` : '.'}\n\nWe can't wait to see you there ✨${linkLine(ws, phase)}`;
+    return `📅 *Change of date*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}. Sorry for the shuffle! 🙏\n\nPlease update your calendar. Everything else stays exactly the same${list ? `:${list}` : '.'}\n\nLock in the new date now, this is still the one not to miss ✨${linkLine(ws, phase)}`;
   }
   if (phase === 'dayof') {
-    return `🚀 *Today's the day!*\n\n*${title}*${host} is live${when ? ` at ${when}` : ' today'}.${list ? ` Here's what we're getting into:${list}` : ''}\n\nGrab a notebook, find a quiet spot and join on time so you don't miss the start ⏰ See you there!${linkLine(ws, phase)}`;
+    return `🚀 *Today's the day!*\n\n*${title}*${host} is live${when ? ` at ${when}` : ' today'}.${list ? ` Here's what we're getting into:${list}` : ''}\n\nThis is the one you don't want to hear about secondhand. Grab a notebook, find a quiet spot and join on time so you don't miss the start ⏰${linkLine(ws, phase)}`;
   }
-  return `✨ Getting ready for *${title}*${host}!${points.length ? '\n\nHere\'s a little of what we\'ll dive into:' : ''}${list}${forWho}\n\nSee you on ${at} 📅 It's going to be a good one!${linkLine(ws, phase)}`;
+  return `🔥 You do NOT want to miss *${title}*${host}!${points.length ? '\n\nHere\'s a little of what we\'ll dive into:' : ''}${list}${forWho}\n\nBlock ${at} 📅 and be there live. You'll want to say you were in the room for this one!${linkLine(ws, phase)}`;
 }
 
 // Links are always added by code, never written by the AI

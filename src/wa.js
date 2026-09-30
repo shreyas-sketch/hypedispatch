@@ -71,6 +71,19 @@ export async function startAccount(id) {
   });
 }
 
+// Resync: drop the current connection and open a fresh one with the same login (no QR needed),
+// so WhatsApp re-sends the latest groups and communities. Waits until it's connected again.
+export async function resyncAccount(id, timeoutMs = 30000) {
+  const old = sessions.get(id);
+  sessions.delete(id); // so the old socket's close event doesn't start its own reconnect
+  try { old?.sock?.end(undefined); } catch {}
+  await startAccount(id);
+  const s = sessions.get(id);
+  const until = Date.now() + timeoutMs;
+  while (s.status !== 'connected' && s.status !== 'scan-qr' && sessions.get(id) === s && Date.now() < until) await sleep(500);
+  return s.status;
+}
+
 export async function logoutAccount(id) {
   const dir = authDir(id);
   const s = sessions.get(id);
