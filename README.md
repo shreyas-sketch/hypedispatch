@@ -4,10 +4,12 @@ Auto-sends daily messages to your workshop WhatsApp communities, written by Clau
 
 | When | What goes out | Links |
 |---|---|---|
-| 2+ days before | Hype message (new angle each day, never a countdown) | Form |
-| 1 day before | "Dropping tomorrow" | Form + Zoom |
+| 2+ days before | Hype message (new angle each day, never a countdown) | Bonus form |
+| 1 day before | "Dropping tomorrow" | Bonus form + Zoom |
 | Workshop day | "We're live today" (can be switched off per workshop) | Zoom only |
-| Rescheduled | New date announcement, 5 minutes after you save it | Form |
+| Rescheduled | New date announcement, 5 minutes after you save it | Bonus form |
+
+The **bonus form** is the short form that helps you tailor the workshop to each person; everyone who fills it gets a surprise bonus. Messages describe it that way and never guess what the bonus is.
 
 ## Setup (Windows, one time)
 
@@ -64,7 +66,7 @@ Dates and times are never taken from the landing page, because those are often o
 ## Every week: add each workshop run
 
 1. **Connect a number** once → scan the QR from WhatsApp → Linked devices.
-2. **+ New workshop** → pick the programme, date, start time (IST), form link and Zoom link.
+2. **+ New workshop** → pick the programme, date, start time (IST), bonus form link and Zoom link.
 3. **Pick the sending number and the community** (e.g. search "4th Oct").
 4. **Save.** That's it. Messages go out automatically every day at the hype time until the workshop.
 
@@ -90,7 +92,7 @@ To change the wait, set `RESCHEDULE_DELAY_MIN=5` in `.env` (or Railway Variables
 - Form and Zoom links are inserted by code, never written by AI.
 - Each programme has its own **signature** (e.g. `*Team Akshat Dani*` + `akshatdani.com`), added by code as the last lines of every message. Edit it under **Programmes → View**.
 - Messages are written to build hype and FOMO so people show up live: a hook opening, what they'd miss, and a push to block the time. Scarcity ("limited seats", "no replay", deadlines) is only used if the landing page says it.
-- Messages aim for 70–110 words with 3–5 emojis, in short paragraphs. The workshop name, the date and time, and the biggest benefit are in *bold*, and the links sit under bold labels (📝 *Register here:*, 🎥 *Zoom link:*). A draft that's too short or has no emojis is sent back to Claude to rewrite.
+- Messages aim for 70–110 words with 3–5 emojis, in short paragraphs. The workshop name, the date and time, and the biggest benefit are in *bold*, and the links sit under bold labels (🎁 *Unlock your surprise bonus:*, 🎥 *Zoom link:*). A draft that's too short or has no emojis is sent back to Claude to rewrite.
 
 ## Good to know
 

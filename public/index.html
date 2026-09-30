@@ -161,10 +161,10 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     </div>
     <div class="week" id="week"></div>
     <div class="row small muted" style="margin-top:12px;gap:14px">
-      <span><span class="pill hype">Hype</span> + form link</span>
-      <span><span class="pill tomorrow">Tomorrow</span> + form & Zoom link</span>
+      <span><span class="pill hype">Hype</span> + bonus form</span>
+      <span><span class="pill tomorrow">Tomorrow</span> + bonus form & Zoom link</span>
       <span><span class="pill dayof">Live today</span> + Zoom link</span>
-      <span><span class="pill reschedule">Rescheduled</span> + form link, sent <span class="rsDelay">5</span> min after you save</span>
+      <span><span class="pill reschedule">Rescheduled</span> + bonus form, sent <span class="rsDelay">5</span> min after you save</span>
     </div>
   </section>
 
@@ -253,9 +253,9 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     <div class="section">
       <h4><span class="step">2</span>Links to share</h4>
       <div class="form">
-        <label class="span2">Registration form link
+        <label class="span2">Bonus form link
           <input id="f_formLink" placeholder="https://forms.gle/…">
-          <span class="help">Added to every message, except on the workshop day.</span></label>
+          <span class="help">The short form that helps you tailor the workshop; everyone who fills it gets a surprise bonus. Added to every message except on the workshop day.</span></label>
         <label class="span2">Zoom link
           <input id="f_zoomLink" placeholder="https://zoom.us/j/…">
           <span class="help">Added the day before and on the workshop day.</span></label>
@@ -414,7 +414,7 @@ function diff(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 864e5)
 function phaseOn(w, day) { if (w.firstSendDate && day < w.firstSendDate && day !== w.date) return null; const d = diff(day, w.date); return d >= 2 ? 'hype' : d === 1 ? 'tomorrow' : d === 0 ? (w.dayOf !== false ? 'dayof' : 'event') : null; }
 
 const PHASE_TEXT = { hype: 'Daily hype', tomorrow: '"It\'s tomorrow" reminder', dayof: '"We\'re live today"', reschedule: 'Date change announcement' };
-const LINK_TEXT = (l) => l.length ? '+ ' + l.join(' & ') : 'no links';
+const LINK_TEXT = (l) => l.length ? '+ ' + l.map((k) => (k === 'form' ? 'bonus form' : k)).join(' & ') : 'no links';
 let showAllLineup = false;
 function renderLineup() {
   const items = S.lineup;
@@ -616,16 +616,16 @@ function renderPlan() {
   const links = (arr) => arr.filter(Boolean).length ? ' with the ' + arr.filter(Boolean).join(' and ') : '';
   const rows = [];
   const hypeFrom = first, hypeTo = addDays(date, -2);
-  if (hypeFrom <= hypeTo) rows.push(['📣', `<b>Daily hype message</b> ${hypeFrom === hypeTo ? `on ${niceDate(hypeFrom)}` : `every day from ${niceDate(hypeFrom)} to ${niceDate(hypeTo)}`} at ${send}${links([form && 'form link'])}`]);
+  if (hypeFrom <= hypeTo) rows.push(['📣', `<b>Daily hype message</b> ${hypeFrom === hypeTo ? `on ${niceDate(hypeFrom)}` : `every day from ${niceDate(hypeFrom)} to ${niceDate(hypeTo)}`} at ${send}${links([form && 'bonus form link'])}`]);
   const dayBefore = addDays(date, -1);
-  if (dayBefore >= first) rows.push(['⏰', `<b>"It's tomorrow" reminder</b> on ${niceDate(dayBefore)} at ${send}${links([form && 'form link', zoom && 'Zoom link'])}`]);
+  if (dayBefore >= first) rows.push(['⏰', `<b>"It's tomorrow" reminder</b> on ${niceDate(dayBefore)} at ${send}${links([form && 'bonus form link', zoom && 'Zoom link'])}`]);
   if (v('dayOf') === 'true' && date >= today) rows.push(['🚀', `<b>"We're live today"</b> on ${niceDate(date)} at ${dayOfAt}${links([zoom && 'Zoom link'])}`]);
   const p = progById(v('programmeId'));
   const notes = [];
   if (v('active') === 'false') notes.push('⏸️ <b>Paused:</b> nothing will be sent until you switch Sending back on (More settings).');
   if (!picked.size) notes.push('⚠️ No groups picked yet, so nothing can be sent.');
   if (p && !p.factSheet) notes.push(`⚠️ ${esc(p.name)} has no fact sheet yet, so nothing can be sent.`);
-  if (!form) notes.push('No registration form link, so messages won\'t include one.');
+  if (!form) notes.push('No bonus form link, so messages won\'t include one.');
   if (!zoom) notes.push('No Zoom link yet. Add it before the day-before message.');
   if (p?.signature) notes.push(`Every message ends with: ${waFormat(p.signature).replace(/\n/g, ' · ')}`);
   $('plan').innerHTML = (rows.length ? rows.map(([i, t]) => `<div class="item"><span>${i}</span><div>${t}</div></div>`).join('') : '<div class="empty">That date has passed, so nothing more will be sent.</div>')

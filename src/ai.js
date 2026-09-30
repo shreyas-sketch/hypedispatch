@@ -196,11 +196,11 @@ export function validate(msg, ws, phase) {
 
 // ---------- 5. Safe fixed template if AI can't produce a clean one ----------
 // Which links go under each message:
-//   form link: every message except on the workshop day
+//   form link (helps us tailor the workshop; filling it unlocks a surprise bonus): every message except on the workshop day
 //   Zoom link: the day before and the workshop day
 export function linksFor(ws, phase) {
   const out = [];
-  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '📝 *Register here:*', url: ws.formLink });
+  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '🎁 *Unlock your surprise bonus:*', url: ws.formLink });
   if ((phase === 'tomorrow' || phase === 'dayof') && ws.zoomLink) out.push({ kind: 'Zoom link', label: '🎥 *Zoom link:*', url: ws.zoomLink });
   return out;
 }
@@ -208,14 +208,19 @@ export function linksFor(ws, phase) {
 function linkBrief(ws, phase) {
   const kinds = linksFor(ws, phase).map((l) => l.kind);
   if (!kinds.length) return 'Do not mention any form or link.';
-  return `End with a short line saying the ${kinds.join(' and ')} ${kinds.length > 1 ? 'are' : 'is'} below (added automatically, do not write any link).`;
+  const form = kinds.includes('form')
+    ? `\nABOUT THE FORM: it is NOT a registration form. It's a short form that helps us tailor the workshop to what each person wants, and everyone who fills it gets a surprise bonus. Make them curious and eager to fill it (tailored workshop + surprise bonus). Never say or guess what the bonus is.`
+    : '';
+  return `End with a short line saying the ${kinds.join(' and ')} ${kinds.length > 1 ? 'are' : 'is'} below (added automatically, do not write any link).${form}`;
 }
 
 function linkLine(ws, phase) {
   const kinds = linksFor(ws, phase).map((l) => l.kind);
   if (!kinds.length) return '';
-  const text = kinds.length > 1 ? 'Form and Zoom link' : kinds[0] === 'form' ? 'Fill in the form' : 'Zoom link';
-  return `\n\n${text} below 👇`;
+  const text = kinds.length > 1 ? '🎁 Fill in the short form below to unlock your *surprise bonus*, and save the Zoom link'
+    : kinds[0] === 'form' ? '🎁 Fill in the short form below so we can tailor the workshop to you, and unlock your *surprise bonus*'
+    : 'Zoom link below';
+  return `\n\n${text} 👇`;
 }
 
 export function fallback(ws, phase) {

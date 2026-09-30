@@ -8,12 +8,14 @@ import os from 'os';
 import path from 'path';
 
 // Fake Claude: writes a valid message from whatever fact sheet it's given
+const prompts = [];
 const fake = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
     const j = JSON.parse(body);
     const user = j.messages[0].content;
+    prompts.push(user);
     const fs_ = JSON.parse(user.match(/FACT SHEET:\n([\s\S]*?)\n\n(?:The workshop|TASK)/)[1]);
     const text = user.includes('RESCHEDULED')
       ? `📅 Quick change, friends! *${fs_.title}* is moving to *${fs_.date_text}, ${fs_.time_text}* (it was ${fs_.old_date_text}). Sorry for the shuffle.\n\n🙏 Please update your calendar, because everything we planned is still coming your way and it's going to be worth every minute you spend with us.\n\nSame energy, same content, same excitement, just a new slot on the calendar. We really can't wait to see you all there ✨`
@@ -75,6 +77,7 @@ await at('2026-10-01T11:02:00'); assert.equal(dryRunSent.length, 2, 'not before 
 await at('2026-10-01T11:03:00'); assert.equal(dryRunSent.length, 4, 'reschedule announced 5 minutes after saving');
 const ann = dryRunSent[2].text;
 assert.ok(ann.includes('https://forms.gle/x') && !ann.includes('zoom.us'), 'reschedule has form link, no Zoom');
+assert.ok(prompts[0].includes('NOT a registration form') && prompts[0].includes('surprise bonus'), 'Claude is told what the form is for');
 assert.ok(ann.endsWith('*Team Akshat Dani*'), 'signature last');
 assert.ok(ann.includes('*High Value Consulting Workshop* is moving to *Tuesday, 6 October, 8 PM IST*'), 'bold kept intact');
 assert.ok(d.sends.every((s) => s.source === 'ai'), 'fake Claude drafts pass the checks');

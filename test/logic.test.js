@@ -54,7 +54,7 @@ assert.equal(withLinks('x', { ...ws, formLink: '' }, 'hype'), 'x', 'no form link
 // Signature is always the very last thing, after the links
 const signed = withLinks('x', { ...ws, signature: '*Team Akshat Dani*\nakshatdani.com' }, 'tomorrow');
 assert.ok(signed.endsWith('🎥 *Zoom link:*\nhttps://zoom.us/j/123\n\n*Team Akshat Dani*\nakshatdani.com'), signed);
-assert.ok(signed.includes('📝 *Register here:*\nhttps://forms.gle/abc'), signed);
+assert.ok(signed.includes('🎁 *Unlock your surprise bonus:*\nhttps://forms.gle/abc'), signed);
 assert.ok(withLinks('x', { ...ws, signature: '*Team X*' }, 'dayof').endsWith('*Team X*'));
 assert.ok(withLinks('x', ws, 'dayof').includes(ws.zoomLink) && !withLinks('x', ws, 'dayof').includes(ws.formLink));
 
@@ -64,8 +64,9 @@ for (const p of ['hype', 'tomorrow', 'dayof']) {
   assert.ok(f.includes('AI Income Workshop'), p);
   assert.ok(!/https?:/.test(f), 'templates never contain links themselves');
 }
-assert.ok(fallback(ws, 'hype').includes('Fill in the form below'));
-assert.ok(fallback(ws, 'tomorrow').includes('Form and Zoom link below'));
+assert.ok(fallback(ws, 'hype').includes('tailor the workshop to you, and unlock your *surprise bonus*'));
+assert.ok(!/regist/i.test(fallback(ws, 'hype') + fallback(ws, 'tomorrow') + withLinks('x', ws, 'hype')), 'never called a registration form');
+assert.ok(fallback(ws, 'tomorrow').includes('unlock your *surprise bonus*, and save the Zoom link'));
 assert.ok(fallback(ws, 'dayof').includes('Zoom link below') && !fallback(ws, 'dayof').includes('orm'));
 assert.ok(!fallback({ ...ws, formLink: '' }, 'hype').includes('below'), 'no form link: no "below" line');
 
