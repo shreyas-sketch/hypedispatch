@@ -1,17 +1,19 @@
 // Checks every minute:
-//  1. Reschedules: announced at the daily check time (7 PM IST by default), or right away if you press "Announce now"
+//  1. Reschedules: announced 5 minutes after you save them (so you can still cancel), or right away with "Announce now"
 //  2. Daily messages: hype / tomorrow / day-of, sent once per day at each workshop's send time
 import { db, save, log } from './db.js';
-import { nowParts, phaseFor, sendTimeFor } from './time.js';
-import { composeMessage, withLinks } from './ai.js';
+import { nowParts, phaseFor, sendTimeFor, addDays } from './time.js';
+import { composeMessage, withLinks, linksFor } from './ai.js';
 import { sendText, sleep } from './wa.js';
-import { resolve, timeLabelOf, displayName } from './workshop.js';
+import { resolve, timeLabelOf, displayName, programmeOf } from './workshop.js';
 
 const running = new Set();
 const warned = new Set(); // problems already logged today, so the minute-by-minute check doesn't flood the log
 const GAP_MIN = Number(process.env.GROUP_GAP_MIN_MS || 4000);
 const GAP_MAX = Number(process.env.GROUP_GAP_MAX_MS || 7000);
-export const RESCHEDULE_CHECK = () => process.env.RESCHEDULE_CHECK_TIME || '19:00';
+// Minutes between saving a reschedule and announcing it
+export const RESCHEDULE_DELAY_MIN = () => Number(process.env.RESCHEDULE_DELAY_MIN || 5);
+export const sendAtOf = (pr) => pr.sendAt || new Date(Date.parse(pr.enteredAt || 0) + RESCHEDULE_DELAY_MIN() * 60_000).toISOString();
 
 export function startScheduler() {
   setInterval(() => tick().catch((e) => log('error', `Scheduler: ${e.message}`)), 60_000);
@@ -40,7 +42,7 @@ export async function tick(now = new Date()) {
     // 1. Pending reschedule: hold everything else for this workshop until it's announced
     const pr = ws.pendingReschedule;
     if (pr) {
-      if (pr.sendNow || hm >= RESCHEDULE_CHECK() || date > pr.enteredDate) {
+      if (pr.sendNow || now.getTime() >= Date.parse(sendAtOf(pr))) {
         launch(`${ws.id}|${date}|reschedule`, () => runReschedule(ws, date), name);
       }
       continue;
@@ -63,6 +65,42 @@ export async function tick(now = new Date()) {
     if (d.sends.find((s) => s.key === key)?.done) continue;
     launch(key, () => runSend(ws, phase, date, key), name);
   }
+}
+
+// Everything lined up to go out in the next few days (shown on the dashboard, no approval needed)
+export function lineup(now = new Date(), days = 7) {
+  const { date: today, hm } = nowParts(now);
+  const d = db();
+  const out = [];
+  for (const orig of d.workshops) {
+    const base = { workshopId: orig.id, workshop: displayName(orig), groups: orig.groups?.length || 0 };
+    const blocked = orig.active === false ? 'Paused'
+      : !programmeOf(orig)?.factSheet ? 'Fact sheet missing'
+      : !orig.groups?.length ? 'No groups picked'
+      : !orig.account ? 'No sending number picked' : '';
+    let ws = orig;
+    let skipToday = d.sends.some((s) => s.workshopId === orig.id && s.phase === 'reschedule' && s.date === today);
+    const pr = orig.pendingReschedule;
+    if (pr) {
+      const at = nowParts(new Date(Math.max(Date.parse(sendAtOf(pr)), now.getTime())));
+      out.push({ ...base, phase: 'reschedule', date: at.date, time: pr.sendNow ? hm : at.hm, newDate: pr.date, links: linksFor(orig, 'reschedule').map((l) => l.kind), blocked, due: pr.sendNow || now.getTime() >= Date.parse(sendAtOf(pr)) });
+      // After the announcement, the daily messages continue toward the new date
+      ws = { ...orig, date: pr.date, startTime: pr.startTime || orig.startTime };
+      if (at.date === today) skipToday = true;
+    }
+    for (let i = 0; i < days; i++) {
+      const day = addDays(today, i);
+      if (i === 0 && skipToday) continue;
+      if (ws.firstSendDate && day < ws.firstSendDate) continue;
+      const { phase } = phaseFor(ws, day);
+      if (!phase) continue;
+      const time = sendTimeFor(ws, phase);
+      if (d.sends.find((s) => s.key === `${ws.id}|${day}|${phase}`)?.done) continue; // already sent
+      if (i === 0 && phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // workshop already started
+      out.push({ ...base, phase, date: day, time, links: linksFor(ws, phase).map((l) => l.kind), blocked, due: i === 0 && hm >= time });
+    }
+  }
+  return out.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 }
 
 // Draft once per day+phase, then deliver

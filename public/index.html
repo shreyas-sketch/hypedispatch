@@ -88,6 +88,17 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
 .prog{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .prog:first-child{border-top:0}
 .prog a{color:var(--muted);font-size:12px;text-decoration:none;word-break:break-all}
+.help{font-weight:400;color:var(--muted);font-size:11.5px}
+.plan{display:grid;gap:8px}
+.plan .item{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
+.plan .item b{font-weight:600}
+.more{margin-top:12px}
+.more summary{cursor:pointer;font-weight:600;color:var(--muted);font-size:13px}
+.lu{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.lu:first-child{border-top:0}
+.lu .when{min-width:118px;font-weight:600}
+.lu .when .small{font-weight:400}
+.lu.blocked{opacity:.75}
 .pending{background:var(--warn-soft);border-radius:12px;padding:12px 14px}
 main>*,.cols>*{min-width:0} /* let wide tables scroll inside their card instead of widening the page */
 .tabs .short{display:none}
@@ -134,6 +145,14 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
   <section class="card setup" id="setup" data-tab="week" hidden></section>
 
   <section class="card" data-tab="week">
+    <div class="row" style="margin-bottom:10px">
+      <h2 style="margin:0">Lined up next</h2>
+      <span class="muted small">Messages that will go out automatically. Nothing needs approving; open a workshop to change or pause it.</span>
+    </div>
+    <div id="lineup"></div>
+  </section>
+
+  <section class="card" data-tab="week">
     <div class="row" style="margin-bottom:14px">
       <h2 style="margin:0">This week</h2>
       <span class="muted small">What each workshop sends, day by day (IST)</span>
@@ -145,7 +164,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
       <span><span class="pill hype">Hype</span> + form link</span>
       <span><span class="pill tomorrow">Tomorrow</span> + form & Zoom link</span>
       <span><span class="pill dayof">Live today</span> + Zoom link</span>
-      <span><span class="pill reschedule">Rescheduled</span> + form link, announced at <b id="rchk">7 PM</b></span>
+      <span><span class="pill reschedule">Rescheduled</span> + form link, sent <span class="rsDelay">5</span> min after you save</span>
     </div>
   </section>
 
@@ -218,27 +237,34 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
   </div>
   <div class="dbody">
     <div class="section">
-      <h4><span class="step">1</span>Which workshop, when</h4>
+      <h4><span class="step">1</span>Which workshop, and when is it?</h4>
       <div class="form">
-        <label class="span2">Programme<select id="f_programmeId" autofocus></select></label>
-        <label>Workshop date<input id="f_date" type="date"></label>
-        <label>Starts at (IST)<input id="f_startTime" type="time"></label>
-        <label class="span2">Time as written in messages <span class="muted" style="font-weight:400">(optional)</span><input id="f_timeLabel" placeholder="Blank = start time + IST, e.g. 7 PM IST"></label>
-        <label>Daily hype at<input id="f_sendTime" type="time"></label>
-        <label>Start sending from<input id="f_firstSendDate" type="date"></label>
-        <label>Day-of message<select id="f_dayOf"><option value="true">On</option><option value="false">Off</option></select></label>
-        <label>Day-of message at<input id="f_dayOfTime" type="time"></label>
-        <label>Status<select id="f_active"><option value="true">Active (auto-send)</option><option value="false">Paused</option></select></label>
-        <label>Name <span class="muted" style="font-weight:400">(optional)</span><input id="f_name" placeholder="Auto"></label>
-        <label class="span2">Form link (every message except the workshop day)<input id="f_formLink" placeholder="https://forms..."></label>
-        <label class="span2">Zoom link (day before + day of)<input id="f_zoomLink" placeholder="https://zoom.us/j/..."></label>
+        <label class="span4">Workshop
+          <select id="f_programmeId" autofocus></select>
+          <span class="help">Messages are written from this workshop's landing page.</span></label>
+        <label class="span2">Workshop date
+          <input id="f_date" type="date"></label>
+        <label class="span2">Start time (India time)
+          <input id="f_startTime" type="time"></label>
       </div>
       <div id="factWarn" class="small" style="margin-top:8px;color:var(--bad)"></div>
     </div>
 
     <div class="section">
-      <h4 id="secGroups"><span class="step">2</span>Community to send to</h4>
-      <p class="muted small" style="margin:0 0 10px">Once you pick the community and save, messages go out automatically every day until the workshop.</p>
+      <h4><span class="step">2</span>Links to share</h4>
+      <div class="form">
+        <label class="span2">Registration form link
+          <input id="f_formLink" placeholder="https://forms.gle/…">
+          <span class="help">Added to every message, except on the workshop day.</span></label>
+        <label class="span2">Zoom link
+          <input id="f_zoomLink" placeholder="https://zoom.us/j/…">
+          <span class="help">Added the day before and on the workshop day.</span></label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h4 id="secGroups"><span class="step">3</span>Which WhatsApp groups get the messages?</h4>
+      <p class="muted small" style="margin:0 0 10px">First pick the WhatsApp number that sends them, then tick the groups or communities.</p>
       <div class="row" style="margin-bottom:10px">
         <select id="f_account" style="max-width:260px" onchange="loadGroups()"></select>
         <button class="small" id="gResync" onclick="resyncGroups()" title="Reload this number's groups from WhatsApp (use after joining a new community)">↻ Resync groups</button>
@@ -248,18 +274,46 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
       <div class="groups" id="groups"><div class="empty">Pick a connected number to load its groups</div></div>
     </div>
 
+    <div class="section">
+      <h4><span class="step">4</span>What will be sent</h4>
+      <div id="plan" class="plan"></div>
+      <details class="more" id="moreSettings">
+        <summary>More settings (optional): message times, start date, pause</summary>
+        <div class="form" style="margin-top:12px">
+          <label class="span2">Send the daily message at
+            <input id="f_sendTime" type="time">
+            <span class="help">Time for the daily hype and "tomorrow" messages.</span></label>
+          <label class="span2">Start sending from
+            <input id="f_firstSendDate" type="date">
+            <span class="help">Leave as today to start straight away.</span></label>
+          <label class="span2">Send a message on the workshop day?
+            <select id="f_dayOf"><option value="true">Yes</option><option value="false">No</option></select></label>
+          <label class="span2">Workshop-day message at
+            <input id="f_dayOfTime" type="time"></label>
+          <label class="span2">Write the time in messages as
+            <input id="f_timeLabel" placeholder="Leave blank for e.g. 7 PM IST">
+            <span class="help">Only if you want something different, e.g. "7:30 PM sharp".</span></label>
+          <label class="span2">Sending
+            <select id="f_active"><option value="true">On: sends automatically</option><option value="false">Paused: nothing is sent</option></select></label>
+          <label class="span4">Custom name
+            <input id="f_name" placeholder="Leave blank to use the workshop name and date">
+            <span class="help">Only shown on this dashboard.</span></label>
+        </div>
+      </details>
+    </div>
+
     <div class="section" id="rsSection">
-      <h4><span class="step">3</span>Reschedule</h4>
+      <h4><span class="step">5</span>Date changed? Reschedule</h4>
       <div id="rsPending"></div>
       <div id="rsForm">
-        <p class="muted small" style="margin:0 0 10px">Enter the new date. It's announced to the community at the daily check (<b class="rchk">7 PM</b>), so you can still cancel until then. Regular messages pause until it's announced.</p>
+        <p class="muted small" style="margin:0 0 10px">Enter the new date. A "date changed" message goes to the groups <b><span class="rsDelay">5</span> minutes</b> after you save, so you have time to cancel a mistake. After that, the daily messages continue toward the new date.</p>
         <div class="form">
           <label>New date<input id="r_date" type="date"></label>
           <label>New start (IST)<input id="r_startTime" type="time"></label>
           <label class="span2">New time as written <span class="muted" style="font-weight:400">(optional)</span><input id="r_timeLabel" placeholder="Blank = start time + IST"></label>
         </div>
         <div class="row" style="margin-top:10px">
-          <button id="rsLater" onclick="reschedule(false)">Save, announce at <span class="rchk">7 PM</span></button>
+          <button id="rsLater" class="primary" onclick="reschedule(false)">Save, announce in <span class="rsDelay">5</span> min</button>
           <button id="rsNow" onclick="reschedule(true)">Announce now</button>
           <button class="ghost" onclick="preview('reschedule')">Preview announcement</button>
         </div>
@@ -267,11 +321,11 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     </div>
 
     <div class="section">
-      <h4><span class="step">4</span>Preview (nothing is sent)</h4>
+      <h4><span class="step" id="pvStep">6</span>Preview a message (nothing is sent)</h4>
       <div class="row" style="margin-bottom:10px">
-        <button onclick="preview('hype')">Hype</button>
+        <button onclick="preview('hype')">Daily hype</button>
         <button onclick="preview('tomorrow')">Day before</button>
-        <button onclick="preview('dayof')">Day of</button>
+        <button onclick="preview('dayof')">Workshop day</button>
         <span id="pvMeta" class="small muted"></span>
       </div>
       <div id="pv"></div>
@@ -281,6 +335,11 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
       </div>
     </div>
   </div>
+</dialog>
+
+<dialog id="qpDlg" style="width:min(560px,96vw)">
+  <div class="dhead"><h3>Message preview</h3><span class="grow"></span><button class="ghost" onclick="qpDlg.close()">Close</button></div>
+  <div class="dbody"><div id="qpBody"></div><div id="qpMeta" class="small muted"></div></div>
 </dialog>
 
 <div class="toast" id="toast"></div>
@@ -354,6 +413,39 @@ function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(
 function diff(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 864e5); }
 function phaseOn(w, day) { if (w.firstSendDate && day < w.firstSendDate && day !== w.date) return null; const d = diff(day, w.date); return d >= 2 ? 'hype' : d === 1 ? 'tomorrow' : d === 0 ? (w.dayOf !== false ? 'dayof' : 'event') : null; }
 
+const PHASE_TEXT = { hype: 'Daily hype', tomorrow: '"It\'s tomorrow" reminder', dayof: '"We\'re live today"', reschedule: 'Date change announcement' };
+const LINK_TEXT = (l) => l.length ? '+ ' + l.join(' & ') : 'no links';
+let showAllLineup = false;
+function renderLineup() {
+  const items = S.lineup;
+  if (!items.length) { $('lineup').innerHTML = '<div class="empty">Nothing lined up. Add a workshop and pick its groups to start.</div>'; return; }
+  const shown = showAllLineup ? items : items.slice(0, 6);
+  const dayLabel = (d) => d === S.now.date ? 'Today' : d === addDays(S.now.date, 1) ? 'Tomorrow' : niceDate(d);
+  $('lineup').innerHTML = shown.map((m) => `
+    <div class="lu ${m.blocked ? 'blocked' : ''}">
+      <div class="when">${dayLabel(m.date)}<div class="small muted">${m.due && !m.blocked ? 'sending now' : fmt12(m.time)}</div></div>
+      <span class="pill ${m.phase}">${PHASE_LABEL[m.phase]}</span>
+      <div class="grow"><div style="font-weight:600">${esc(m.workshop)}</div>
+        <div class="small muted">${PHASE_TEXT[m.phase]}${m.newDate ? ' → ' + niceDate(m.newDate) : ''} · ${LINK_TEXT(m.links)} · ${m.groups} group${m.groups === 1 ? '' : 's'}</div></div>
+      ${m.blocked ? `<button class="pill bad" onclick="openEditor('${m.workshopId}'${m.blocked === 'No groups picked' || m.blocked === 'No sending number picked' ? ",'groups'" : ''})" title="Open to fix">Won't send: ${esc(m.blocked)} →</button>` : ''}
+      <button class="small" onclick="quickPreview('${m.workshopId}','${m.phase}')">Preview</button>
+    </div>`).join('') + (items.length > 6 ? `<div style="margin-top:8px"><button class="ghost small" onclick="showAllLineup=!showAllLineup;renderLineup()">${showAllLineup ? 'Show less' : `Show all ${items.length}`}</button></div>` : '');
+}
+
+async function quickPreview(id, phase) {
+  $('qpBody').innerHTML = '<div class="empty">Writing a sample… (the real message is written fresh when it goes out)</div>';
+  $('qpMeta').textContent = '';
+  qpDlg.showModal();
+  try {
+    const r = await api(`/api/workshops/${id}/preview`, { method: 'POST', body: { phase } });
+    $('qpBody').innerHTML = `<div class="preview">${waFormat(r.text)}</div>`;
+    $('qpMeta').textContent = r.source === 'ai' ? 'Sample written by Claude. Each real message is written fresh, so the wording will differ.' : `Safe template (${r.error})`;
+  } catch (e) { $('qpBody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+// Show WhatsApp formatting like the phone does: *bold*, _italic_
+const waFormat = (t) => esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_/g, '$1<i>$2</i>');
+
 function renderWeek() {
   const days = [...Array(7)].map((_, i) => addDays(S.now.date, i));
   const ws = S.workshops.filter((w) => w.date >= S.now.date || w.pendingReschedule).sort((a, b) => a.date.localeCompare(b.date));
@@ -362,7 +454,7 @@ function renderWeek() {
   const rows = ws.map((w) => {
     const prog = progById(w.programmeId);
     const pr = w.pendingReschedule;
-    const warn = pr ? `<span class="pill reschedule">→ ${niceDate(pr.date)} ${pr.sendNow ? 'announcing now' : 'at ' + S.rescheduleCheck}</span>`
+    const warn = pr ? `<span class="pill reschedule">→ ${niceDate(pr.date)} · ${pr.sendNow ? 'announcing now' : 'announcing at ' + clockOf(pr.sendAt)}</span>`
       : !prog ? '<span class="pill bad">Programme deleted</span>'
       : !prog.factSheet ? `<button class="pill bad" onclick="event.stopPropagation();openProg('${prog.id}')" title="Open this programme to build its fact sheet">Fact sheet missing · Build →</button>`
       : !w.groups?.length ? `<button class="pill warn" onclick="event.stopPropagation();openEditor('${w.id}','groups')" title="Pick the community to send to">No community picked · Pick →</button>`
@@ -371,7 +463,7 @@ function renderWeek() {
     const cells = days.map((d) => {
       const rs = S.sends.find((s) => s.workshopId === w.id && s.phase === 'reschedule' && s.date === d);
       if (rs) return `<td class="cell"><span class="pill reschedule">${rs.done ? '✓ ' : ''}Rescheduled</span></td>`;
-      if (pr) return d === S.now.date ? `<td class="cell"><span class="pill reschedule">Pending</span><div class="t">${pr.sendNow ? 'now' : S.rescheduleCheck}</div></td>` : '<td></td>';
+      if (pr) return d === S.now.date ? `<td class="cell"><span class="pill reschedule">Pending</span><div class="t">${pr.sendNow ? 'now' : clockOf(pr.sendAt)}</div></td>` : '<td></td>';
       const p = phaseOn(w, d);
       if (!p) return '<td></td>';
       if (p === 'event') return `<td class="cell"><div class="star">★ Workshop</div></td>`;
@@ -420,7 +512,7 @@ function renderSends() {
   $('sends').innerHTML = S.sends.length ? S.sends.slice(0, 25).map((s) => {
     const r = Object.values(s.results || {}); const ok = r.filter((x) => x.ok).length;
     return `<div class="send"><div class="row"><b>${esc(s.workshop)}</b><span class="pill ${s.phase}">${PHASE_LABEL[s.phase]}</span><span class="small muted">${s.date}</span><span class="grow"></span>${s.source === 'fallback' ? '<span class="pill warn">safe template</span>' : ''}<span class="pill ${ok === r.length ? 'ok' : 'warn'}">${ok}/${r.length} groups</span></div>
-      <details><summary>Message</summary><div class="preview" style="margin-top:8px">${esc(s.text)}</div>${r.filter((x) => !x.ok).map((x) => `<div class="small" style="color:var(--bad)">✗ ${esc(x.name)}: ${esc(x.error)}</div>`).join('')}</details></div>`;
+      <details><summary>Message</summary><div class="preview" style="margin-top:8px">${waFormat(s.text)}</div>${r.filter((x) => !x.ok).map((x) => `<div class="small" style="color:var(--bad)">✗ ${esc(x.name)}: ${esc(x.error)}</div>`).join('')}</details></div>`;
   }).join('') : '<div class="empty">Messages will show here once they go out</div>';
 }
 
@@ -430,8 +522,8 @@ async function refresh() {
   $('storePill').hidden = !S.storageWarning;
   $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
   $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key ⓘ';
-  document.querySelectorAll('#rchk,.rchk').forEach((el) => { el.textContent = fmt12(S.rescheduleCheck); });
-  renderTabs(); renderSetup(); renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
+  document.querySelectorAll('.rsDelay').forEach((el) => { el.textContent = S.rescheduleDelay; });
+  renderTabs(); renderSetup(); renderLineup(); renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
 }
 
 async function resync(id, btn) {
@@ -499,7 +591,8 @@ function openEditor(id, focus) {
   $('edTitle').textContent = cur ? cur.displayName : 'New workshop';
   $('delBtn').hidden = !cur;
   for (const k of F) $('f_' + k).value = w[k] ?? '';
-  $('f_programmeId').onchange = checkFacts; checkFacts();
+  $('f_programmeId').onchange = () => { checkFacts(); renderPlan(); }; checkFacts();
+  $('moreSettings').open = !!cur && (cur.active === false || cur.dayOf === false);
   $('f_account').innerHTML = '<option value="">Choose sending number…</option>' + S.accounts.map((a) => `<option value="${a.id}" ${a.id === w.account ? 'selected' : ''}>${esc(a.name)} (${a.status})</option>`).join('');
   picked = new Map((w.groups || []).map((g) => [g.jid, g]));
   allGroups = []; $('pv').innerHTML = ''; $('pvMeta').textContent = ''; $('testRow').hidden = true; $('gSearch').value = '';
@@ -507,25 +600,61 @@ function openEditor(id, focus) {
   $('r_startTime').value = w.startTime || '';
   renderReschedule();
   loadGroups();
+  renderPlan();
   editor.showModal();
   if (focus === 'groups') { $('secGroups').scrollIntoView({ block: 'start' }); $('f_account').focus(); }
   if (focus === 'reschedule') { $('rsSection').scrollIntoView({ block: 'start' }); (cur?.pendingReschedule ? $('rsPending').querySelector('button') : $('r_date'))?.focus(); }
 }
+// Plain-language summary of what this workshop will send, updated as you type
+function renderPlan() {
+  const v = (k) => $('f_' + k).value;
+  const date = v('date'), today = S.now.date;
+  if (!date) { $('plan').innerHTML = '<div class="empty">Pick the workshop date to see what will be sent.</div>'; return; }
+  const first = [v('firstSendDate') || today, today].sort()[1];
+  const send = fmt12(v('sendTime') || '11:00'), dayOfAt = fmt12(v('dayOfTime') || '10:00');
+  const form = v('formLink').trim(), zoom = v('zoomLink').trim();
+  const links = (arr) => arr.filter(Boolean).length ? ' with the ' + arr.filter(Boolean).join(' and ') : '';
+  const rows = [];
+  const hypeFrom = first, hypeTo = addDays(date, -2);
+  if (hypeFrom <= hypeTo) rows.push(['📣', `<b>Daily hype message</b> ${hypeFrom === hypeTo ? `on ${niceDate(hypeFrom)}` : `every day from ${niceDate(hypeFrom)} to ${niceDate(hypeTo)}`} at ${send}${links([form && 'form link'])}`]);
+  const dayBefore = addDays(date, -1);
+  if (dayBefore >= first) rows.push(['⏰', `<b>"It's tomorrow" reminder</b> on ${niceDate(dayBefore)} at ${send}${links([form && 'form link', zoom && 'Zoom link'])}`]);
+  if (v('dayOf') === 'true' && date >= today) rows.push(['🚀', `<b>"We're live today"</b> on ${niceDate(date)} at ${dayOfAt}${links([zoom && 'Zoom link'])}`]);
+  const p = progById(v('programmeId'));
+  const notes = [];
+  if (v('active') === 'false') notes.push('⏸️ <b>Paused:</b> nothing will be sent until you switch Sending back on (More settings).');
+  if (!picked.size) notes.push('⚠️ No groups picked yet, so nothing can be sent.');
+  if (p && !p.factSheet) notes.push(`⚠️ ${esc(p.name)} has no fact sheet yet, so nothing can be sent.`);
+  if (!form) notes.push('No registration form link, so messages won\'t include one.');
+  if (!zoom) notes.push('No Zoom link yet. Add it before the day-before message.');
+  if (p?.signature) notes.push(`Every message ends with: ${waFormat(p.signature).replace(/\n/g, ' · ')}`);
+  $('plan').innerHTML = (rows.length ? rows.map(([i, t]) => `<div class="item"><span>${i}</span><div>${t}</div></div>`).join('') : '<div class="empty">That date has passed, so nothing more will be sent.</div>')
+    + (notes.length ? `<div class="small muted" style="display:grid;gap:4px;margin-top:4px">${notes.map((n) => `<div>${n}</div>`).join('')}</div>` : '');
+}
+
 function checkFacts() {
   const p = progById($('f_programmeId').value);
   $('factWarn').textContent = p && !p.factSheet ? `${p.name} has no fact sheet yet. Build it in Programmes, otherwise nothing can be sent.` : '';
 }
 
+// "7:42 PM" in the dashboard's timezone, and minutes from now (server clock)
+const clockOf = (iso) => new Date(iso).toLocaleTimeString('en-IN', { timeZone: S.tz, hour: 'numeric', minute: '2-digit' }).toUpperCase();
+const minsUntil = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - S.nowMs) / 60000));
+function whenAnnounced(pr) {
+  if (pr.sendNow || minsUntil(pr.sendAt) === 0) return 'Announcing within a minute';
+  const m = minsUntil(pr.sendAt);
+  return `Goes out at ${clockOf(pr.sendAt)} (in ${m} min)`;
+}
+
 function renderReschedule() {
   $('rsSection').hidden = !cur;
+  $('pvStep').textContent = cur ? 6 : 5;
   const pr = cur?.pendingReschedule;
   $('rsForm').hidden = !!pr;
-  const passed = S.now.hm >= S.rescheduleCheck; // after today's check, a saved reschedule goes out right away
-  $('rsLater').hidden = passed;
-  $('rsNow').textContent = passed ? `Announce now (today's ${fmt12(S.rescheduleCheck)} check has passed)` : 'Announce now';
+  document.querySelectorAll('.rsDelay').forEach((el) => { el.textContent = S.rescheduleDelay; });
   $('rsPending').innerHTML = pr ? `<div class="pending row">
       <div class="grow"><b>Moving to ${niceDate(pr.date)}${pr.startTime ? ', ' + fmt12(pr.startTime) : ''}</b>
-      <div class="small">${pr.sendNow || S.now.hm >= S.rescheduleCheck ? 'Announcing within a minute.' : `Will be announced at ${fmt12(S.rescheduleCheck)}, then daily messages continue toward the new date.`}</div></div>
+      <div class="small">${whenAnnounced(pr)}. You can still cancel until then. After that, daily messages continue toward the new date.</div></div>
       <button class="small" onclick="preview('reschedule')">Preview</button>
       <button class="small" onclick="cancelReschedule()">Cancel</button></div>` : '';
 }
@@ -559,7 +688,7 @@ async function reschedule(now) {
   await busy(null, async () => {
     await api(`/api/workshops/${cur.id}/reschedule`, { method: 'POST', body });
     await refresh(); cur = S.workshops.find((w) => w.id === cur.id); renderReschedule();
-    toast(now ? 'Announcing now' : `Saved. Goes out at ${fmt12(S.rescheduleCheck)}`);
+    toast(now ? 'Announcing now' : `Saved. ${whenAnnounced(cur.pendingReschedule)}.`);
   });
 }
 async function cancelReschedule() {
@@ -608,7 +737,7 @@ function renderGroups() {
   }).join('') : '<div class="empty">No groups</div>';
   $('testJid').innerHTML = list.map((g) => `<option value="${g.jid}">${esc(g.name)}</option>`).join('');
 }
-function toggleG(jid, on) { const g = allGroups.find((x) => x.jid === jid) || picked.get(jid); on ? picked.set(jid, { jid, name: g.name }) : picked.delete(jid); $('gCount').textContent = `${picked.size} selected`; }
+function toggleG(jid, on) { const g = allGroups.find((x) => x.jid === jid) || picked.get(jid); on ? picked.set(jid, { jid, name: g.name }) : picked.delete(jid); $('gCount').textContent = `${picked.size} selected`; renderPlan(); }
 
 async function preview(phase) {
   await busy(null, async () => {
@@ -617,7 +746,7 @@ async function preview(phase) {
     const body = { phase, date: $('r_date').value, startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value };
     const r = await api(`/api/workshops/${cur.id}/preview`, { method: 'POST', body });
     pvText = r.text;
-    $('pv').innerHTML = `<div class="preview">${esc(r.text)}</div>`;
+    $('pv').innerHTML = `<div class="preview">${waFormat(r.text)}</div>`;
     $('pvMeta').textContent = r.source === 'ai' ? `Written by Claude, passed checks (attempt ${r.attempts})` : `Safe template used: ${r.error}`;
     $('testRow').hidden = !$('testJid').options.length;
     $('pv').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -625,8 +754,10 @@ async function preview(phase) {
 }
 async function sendTest() { await busy(null, async () => { await api(`/api/workshops/${cur.id}/test`, { method: 'POST', body: { jid: $('testJid').value, text: pvText } }); toast('Sent to that group'); }); }
 
-const editor = $('editor'), progDlg = $('progDlg');
-refresh(); setInterval(() => { if (!editor.open && !progDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);
+const editor = $('editor'), progDlg = $('progDlg'), qpDlg = $('qpDlg');
+editor.addEventListener('input', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
+editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
+refresh(); setInterval(() => { if (!editor.open && !progDlg.open && !qpDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);
 </script>
 </body>
 </html>

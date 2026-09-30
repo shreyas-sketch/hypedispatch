@@ -28,6 +28,12 @@ export function phaseFor(ws, today) {
   return { phase: null, daysLeft: d };
 }
 
+export function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 export function sendTimeFor(ws, phase) {
   return phase === 'dayof' ? (ws.dayOfTime || ws.sendTime || '10:00') : (ws.sendTime || '11:00');
 }

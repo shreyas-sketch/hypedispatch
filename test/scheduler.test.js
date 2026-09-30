@@ -16,8 +16,8 @@ const fake = http.createServer((req, res) => {
     const user = j.messages[0].content;
     const fs_ = JSON.parse(user.match(/FACT SHEET:\n([\s\S]*?)\n\n(?:The workshop|TASK)/)[1]);
     const text = user.includes('RESCHEDULED')
-      ? `📅 Quick change, friends! *${fs_.title}* is moving to ${fs_.date_text}, ${fs_.time_text} (it was ${fs_.old_date_text}). Sorry for the shuffle.\n\n🙏 Please update your calendar, because everything we planned is still coming your way and it's going to be worth every minute you spend with us.\n\nSame energy, same content, same excitement, just a new slot on the calendar. We really can't wait to see you all there ✨`
-      : `🔥 Getting so excited for *${fs_.title}* on ${fs_.date_text} at ${fs_.time_text}! We're going deep on real, practical stuff you can actually use the very next day.\n\n💡 Bring your questions, bring your curiosity, and bring that one problem you have been stuck on for a while now.\n\nLet's make it a great session together, one where you walk away with clarity and a plan you can start on straight away ✨`;
+      ? `📅 Quick change, friends! *${fs_.title}* is moving to *${fs_.date_text}, ${fs_.time_text}* (it was ${fs_.old_date_text}). Sorry for the shuffle.\n\n🙏 Please update your calendar, because everything we planned is still coming your way and it's going to be worth every minute you spend with us.\n\nSame energy, same content, same excitement, just a new slot on the calendar. We really can't wait to see you all there ✨`
+      : `🔥 Getting so excited for *${fs_.title}* on *${fs_.date_text} at ${fs_.time_text}*! We're going deep on real, practical stuff you can actually use the very next day.\n\n💡 Bring your questions, bring your curiosity, and bring that one problem you have been stuck on for a while now.\n\nLet's make it a great session together, one where you walk away with clarity and a plan you can start on straight away ✨`;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model: j.model, content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }));
   });
@@ -31,7 +31,7 @@ process.env.GROUP_GAP_MAX_MS = '2';
 process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), 'hype-')));
 
 const { db, save } = await import('../src/db.js');
-const { tick } = await import('../src/scheduler.js');
+const { tick, lineup } = await import('../src/scheduler.js');
 const { dryRunSent } = await import('../src/wa.js');
 const wait = () => new Promise((r) => setTimeout(r, 300));
 const at = async (isoIST) => { await tick(new Date(isoIST + '+05:30')); await wait(); };
@@ -52,15 +52,31 @@ await at('2026-09-30T11:01:00'); assert.equal(dryRunSent.length, 2, 'hype to bot
 assert.ok(dryRunSent[0].text.includes('https://forms.gle/x') && !dryRunSent[0].text.includes('zoom.us') && dryRunSent[0].text.includes('Sunday, 4 October'), 'hype has form link, no Zoom');
 await at('2026-09-30T11:30:00'); assert.equal(dryRunSent.length, 2, 'no duplicate same day');
 
-// Oct 1 morning: word comes in that it's moving to Oct 6, 8 PM
-d.workshops[0].pendingReschedule = { date: '2026-10-06', startTime: '20:00', timeLabel: '', sendNow: false, enteredDate: '2026-10-01' };
+// Lined-up messages before anything changes: today's hype is sent, so next is Oct 1 hype
+{
+  const l = lineup(new Date('2026-09-30T12:00:00+05:30'));
+  assert.deepEqual(l.slice(0, 3).map((m) => `${m.date} ${m.time} ${m.phase}`), ['2026-10-01 11:00 hype', '2026-10-02 11:00 hype', '2026-10-03 11:00 tomorrow']);
+  assert.deepEqual(l[2].links, ['form', 'Zoom link']);
+  assert.equal(l.find((m) => m.phase === 'dayof').time, '10:00');
+}
+
+// Oct 1, 10:58: word comes in that it's moving to Oct 6, 8 PM. Announced 5 minutes later (11:03).
+d.workshops[0].pendingReschedule = { date: '2026-10-06', startTime: '20:00', timeLabel: '', sendNow: false, enteredDate: '2026-10-01',
+  enteredAt: new Date('2026-10-01T10:58:00+05:30').toISOString(), sendAt: new Date('2026-10-01T11:03:00+05:30').toISOString() };
 save();
-await at('2026-10-01T11:05:00'); assert.equal(dryRunSent.length, 2, 'regular hype held while reschedule pending');
-await at('2026-10-01T18:59:00'); assert.equal(dryRunSent.length, 2, 'not before 7 PM');
-await at('2026-10-01T19:00:00'); assert.equal(dryRunSent.length, 4, 'reschedule announced at 7 PM');
+{
+  const l = lineup(new Date('2026-10-01T10:59:00+05:30'));
+  assert.equal(`${l[0].phase} ${l[0].date} ${l[0].time}`, 'reschedule 2026-10-01 11:03', 'announcement is first in line');
+  assert.ok(!l.some((m) => m.date === '2026-10-01' && m.phase !== 'reschedule'), 'no regular message on the announcement day');
+  assert.equal(l.find((m) => m.phase === 'tomorrow').date, '2026-10-05', 'daily messages already follow the new date');
+}
+await at('2026-10-01T11:01:00'); assert.equal(dryRunSent.length, 2, 'regular hype held while reschedule pending');
+await at('2026-10-01T11:02:00'); assert.equal(dryRunSent.length, 2, 'not before the 5 minutes are up');
+await at('2026-10-01T11:03:00'); assert.equal(dryRunSent.length, 4, 'reschedule announced 5 minutes after saving');
 const ann = dryRunSent[2].text;
 assert.ok(ann.includes('https://forms.gle/x') && !ann.includes('zoom.us'), 'reschedule has form link, no Zoom');
 assert.ok(ann.endsWith('*Team Akshat Dani*'), 'signature last');
+assert.ok(ann.includes('*High Value Consulting Workshop* is moving to *Tuesday, 6 October, 8 PM IST*'), 'bold kept intact');
 assert.ok(d.sends.every((s) => s.source === 'ai'), 'fake Claude drafts pass the checks');
 assert.ok(ann.includes('Tuesday, 6 October') && ann.includes('8 PM IST') && ann.includes('Sunday, 4 October'), ann);
 assert.equal(d.workshops[0].date, '2026-10-06');
@@ -76,7 +92,7 @@ await at('2026-10-06T10:00:00'); assert.equal(dryRunSent.length, 12, 'day of');
 assert.ok(dryRunSent[10].text.includes('https://zoom.us/j/1') && !dryRunSent[10].text.includes('forms.gle'));
 await at('2026-10-07T11:00:00'); assert.equal(dryRunSent.length, 12, 'stops after the workshop');
 
-// "Announce now" skips the 7 PM wait
+// "Announce now" skips the 5-minute wait
 d.workshops[0].date = '2026-10-10';
 d.workshops[0].pendingReschedule = { date: '2026-10-12', startTime: '', timeLabel: '', sendNow: true, enteredDate: '2026-10-08' };
 save();

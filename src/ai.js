@@ -110,7 +110,9 @@ Hard rules:
 - Tone: high-energy, urgent, exciting and personal, like a host who can't wait for this. Short punchy lines. Not corporate, no ALL CAPS shouting.
 - FOMO techniques to use (truthfully): paint the "after" picture of what attendees walk away with, contrast people who show up with people who hear about it later, make it feel like a moment you'd regret missing, end with a clear push to block the time and be there live.
 - Scarcity, limited seats, "no replay", deadlines or bonuses only for live attendees: use them ONLY if the fact sheet says so (then lean into them hard). Never make them up.
-- Use 3-5 emojis that fit the content, spread through the message (e.g. at the start of the opening line and of a paragraph or two). WhatsApp *bold* allowed once or twice.
+- Use 3-5 emojis that fit the content, spread through the message (e.g. at the start of the opening line and of a paragraph or two).
+- Formatting (WhatsApp style): bold with ONE asterisk on each side, *like this* (never **double**, no # headings, no markdown). Bold the important things: the workshop name, the date and time together (e.g. *Sunday, 4 October, 7 PM IST*), and the single biggest benefit. 2-4 bold parts in total, nothing else bold.
+- One idea per paragraph, blank line between paragraphs. If you list 2-3 things they'll get, put each on its own line starting with an emoji.
 - Do not sign off or add a name at the end: the team signature is added automatically.
 - Must be clearly different from the previous messages (different opening, angle and structure).
 - Output only the message text.`;
@@ -134,7 +136,17 @@ export async function draftMessage(ws, phase, previous = [], feedback = '') {
       ].filter(Boolean).join('\n\n'),
     }],
   });
-  return textOf(res).replace(/^["']|["']$/g, '').trim();
+  return toWhatsApp(textOf(res).replace(/^["']|["']$/g, '').trim());
+}
+
+// Turn stray markdown into WhatsApp formatting: **bold** -> *bold*, no # headings, [text](url) -> text
+export function toWhatsApp(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '*$1*')
+    .replace(/__(.+?)__/g, '_$1_')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 // ---------- 4. Check it against the landing page ----------
@@ -162,6 +174,9 @@ export function validate(msg, ws, phase) {
   const emojis = (msg.match(/\p{Extended_Pictographic}/gu) || []).length;
   if (emojis < 2) issues.push('use 3-5 emojis');
   if (emojis > 7) issues.push('too many emojis, use 3-5');
+  const bold = (msg.match(/\*[^*\n]+\*/g) || []).length;
+  if (bold < 2) issues.push('bold the workshop name and the date and time with single asterisks, *like this*');
+  if (bold > 6) issues.push('too much bold, keep it to 2-4 important parts');
   if (phase === 'hype' && COUNTDOWN.test(msg)) issues.push('it reads like a countdown');
 
   const src = sourceText(ws);
@@ -185,8 +200,8 @@ export function validate(msg, ws, phase) {
 //   Zoom link: the day before and the workshop day
 export function linksFor(ws, phase) {
   const out = [];
-  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '📝 Form', url: ws.formLink });
-  if ((phase === 'tomorrow' || phase === 'dayof') && ws.zoomLink) out.push({ kind: 'Zoom link', label: phase === 'dayof' ? '🎥 Join here' : '🎥 Zoom', url: ws.zoomLink });
+  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '📝 *Register here:*', url: ws.formLink });
+  if ((phase === 'tomorrow' || phase === 'dayof') && ws.zoomLink) out.push({ kind: 'Zoom link', label: '🎥 *Zoom link:*', url: ws.zoomLink });
   return out;
 }
 
@@ -215,20 +230,20 @@ export function fallback(ws, phase) {
   const forWho = f.who_its_for?.[0] ? `\n\n🙌 Made for: ${f.who_its_for[0]}` : '';
   const host = f.host ? ` with *${f.host}*` : '';
   if (phase === 'tomorrow') {
-    return `🔥 It's dropping *tomorrow*!\n\n*${title}*${host} goes live ${at}.${list ? ` Here's a taste of what's coming:${list}` : ''}\n\nSet a reminder right now ⏰ The people who show up live get the most out of it, don't be the one who hears about it later!${linkLine(ws, phase)}`;
+    return `🔥 It's dropping *tomorrow*!\n\n*${title}*${host} goes live *${at}*.${list ? ` Here's a taste of what's coming:${list}` : ''}\n\nSet a reminder right now ⏰ The people who show up live get the most out of it, don't be the one who hears about it later!${linkLine(ws, phase)}`;
   }
   if (phase === 'reschedule') {
     return `📅 *Change of date*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}. Sorry for the shuffle! 🙏\n\nPlease update your calendar. Everything else stays exactly the same${list ? `:${list}` : '.'}\n\nLock in the new date now, this is still the one not to miss ✨${linkLine(ws, phase)}`;
   }
   if (phase === 'dayof') {
-    return `🚀 *Today's the day!*\n\n*${title}*${host} is live${when ? ` at ${when}` : ' today'}.${list ? ` Here's what we're getting into:${list}` : ''}\n\nThis is the one you don't want to hear about secondhand. Grab a notebook, find a quiet spot and join on time so you don't miss the start ⏰${linkLine(ws, phase)}`;
+    return `🚀 *Today's the day!*\n\n*${title}*${host} is live${when ? ` *today at ${when}*` : ' *today*'}.${list ? ` Here's what we're getting into:${list}` : ''}\n\nThis is the one you don't want to hear about secondhand. Grab a notebook, find a quiet spot and join on time so you don't miss the start ⏰${linkLine(ws, phase)}`;
   }
-  return `🔥 You do NOT want to miss *${title}*${host}!${points.length ? '\n\nHere\'s a little of what we\'ll dive into:' : ''}${list}${forWho}\n\nBlock ${at} 📅 and be there live. You'll want to say you were in the room for this one!${linkLine(ws, phase)}`;
+  return `🔥 You do NOT want to miss *${title}*${host}!${points.length ? '\n\nHere\'s a little of what we\'ll dive into:' : ''}${list}${forWho}\n\nBlock *${at}* 📅 and be there live. You'll want to say you were in the room for this one!${linkLine(ws, phase)}`;
 }
 
 // Links are always added by code, never written by the AI
 export function withLinks(msg, ws, phase) {
-  return [msg.trim(), ...linksFor(ws, phase).map((l) => `${l.label}: ${l.url}`), ws.signature?.trim()].filter(Boolean).join('\n\n');
+  return [msg.trim(), ...linksFor(ws, phase).map((l) => `${l.label}\n${l.url}`), ws.signature?.trim()].filter(Boolean).join('\n\n');
 }
 
 // Full pipeline: up to 3 AI attempts, then fallback

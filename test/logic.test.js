@@ -2,7 +2,7 @@
 import assert from 'assert';
 import http from 'http';
 import { phaseFor, nowParts, prettyDate } from '../src/time.js';
-import { validate, fallback, withLinks, fetchPageText, composeMessage } from '../src/ai.js';
+import { validate, fallback, withLinks, fetchPageText, composeMessage, toWhatsApp } from '../src/ai.js';
 
 const ws = {
   id: 't1', name: 'Test', date: '2026-10-04', startTime: '19:00', timeLabel: '7 PM IST', dayOf: true,
@@ -19,7 +19,7 @@ assert.equal(phaseFor({ ...ws, dayOf: false }, '2026-10-04').phase, null);
 assert.deepEqual(nowParts(new Date('2026-09-30T20:00:00Z')), { date: '2026-10-01', hm: '01:30' });
 
 // Validator
-const good = '🤖 Imagine walking away from one evening with 3 AI automations you actually built yourself, not just watched someone else build on a screen.\n\nThat is the whole point of *AI Income Workshop*. Real builds, zero fluff, and a room full of people figuring it out right alongside you, asking the questions you were too shy to ask.\n\n✨ Bring your laptop, your curiosity and a couple of ideas you have been sitting on for a while.\n\nSunday, 7 PM IST. See you there! 🚀';
+const good = '🤖 Imagine walking away from one evening with 3 AI automations you actually built yourself, not just watched someone else build on a screen.\n\nThat is the whole point of *AI Income Workshop*. Real builds, zero fluff, and a room full of people figuring it out right alongside you, asking the questions you were too shy to ask.\n\n✨ Bring your laptop, your curiosity and a couple of ideas you have been sitting on for a while.\n\n*Sunday, 7 PM IST*. See you there! 🚀';
 assert.deepEqual(validate(good, ws, 'hype'), []);
 assert.ok(validate(good.replace('3 AI', '10 AI'), ws, 'hype').some((i) => i.includes('"10"')), 'invented number caught');
 assert.ok(validate('Only 3 days left!! ' + good, ws, 'hype').some((i) => i.includes('countdown')), 'countdown caught');
@@ -32,6 +32,11 @@ assert.ok(validate(good.replace('Sunday', 'Saturday'), ws, 'hype').some((i) => i
 // Length and emojis
 assert.ok(validate('🚀 Short and sweet message that is way too short. ✨', ws, 'hype').some((i) => i.includes('too short')), 'short caught');
 assert.ok(validate(good.replace(/\p{Extended_Pictographic}/gu, ''), ws, 'hype').some((i) => i.includes('emojis')), 'no emojis caught');
+
+// Formatting: needs bold, and stray markdown is turned into WhatsApp formatting
+assert.ok(validate(good.replace(/\*/g, ''), ws, 'hype').some((i) => i.includes('bold')), 'no bold caught');
+assert.equal(toWhatsApp('*A Workshop* is moving to *Tuesday, 6 October*'), '*A Workshop* is moving to *Tuesday, 6 October*', 'text between bold parts untouched');
+assert.equal(toWhatsApp('## Big news\n**AI Income Workshop** is on [our site](https://x.com)\n\n\n\nSee you'), 'Big news\n*AI Income Workshop* is on our site\n\nSee you');
 
 // Numbers must match whole: "10" is not accepted because the fact sheet says "100"
 const ws100 = { ...ws, factSheet: { ...ws.factSheet, other_key_facts: ['100+ students trained'] } };
@@ -48,7 +53,8 @@ assert.ok(withLinks('x', ws, 'reschedule').includes(ws.formLink) && !withLinks('
 assert.equal(withLinks('x', { ...ws, formLink: '' }, 'hype'), 'x', 'no form link set: nothing added');
 // Signature is always the very last thing, after the links
 const signed = withLinks('x', { ...ws, signature: '*Team Akshat Dani*\nakshatdani.com' }, 'tomorrow');
-assert.ok(signed.endsWith('🎥 Zoom: https://zoom.us/j/123\n\n*Team Akshat Dani*\nakshatdani.com'), signed);
+assert.ok(signed.endsWith('🎥 *Zoom link:*\nhttps://zoom.us/j/123\n\n*Team Akshat Dani*\nakshatdani.com'), signed);
+assert.ok(signed.includes('📝 *Register here:*\nhttps://forms.gle/abc'), signed);
 assert.ok(withLinks('x', { ...ws, signature: '*Team X*' }, 'dayof').endsWith('*Team X*'));
 assert.ok(withLinks('x', ws, 'dayof').includes(ws.zoomLink) && !withLinks('x', ws, 'dayof').includes(ws.formLink));
 

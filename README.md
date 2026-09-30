@@ -7,7 +7,7 @@ Auto-sends daily messages to your workshop WhatsApp communities, written by Clau
 | 2+ days before | Hype message (new angle each day, never a countdown) | Form |
 | 1 day before | "Dropping tomorrow" | Form + Zoom |
 | Workshop day | "We're live today" (can be switched off per workshop) | Zoom only |
-| Rescheduled | New date announcement, at the 7 PM check | Form |
+| Rescheduled | New date announcement, 5 minutes after you save it | Form |
 
 ## Setup (Windows, one time)
 
@@ -36,7 +36,7 @@ The PC must stay on and awake at send times (Settings → Power → Sleep: Never
 3. Service → **Variables**, add:
    - `ANTHROPIC_API_KEY`: your key
    - `DASHBOARD_PASSWORD`: required. Until it's set, the dashboard stays locked, because anyone with the link could otherwise send from your numbers.
-   - Optional: any other setting from `.env.example` (e.g. `RESCHEDULE_CHECK_TIME`).
+   - Optional: any other setting from `.env.example` (e.g. `RESCHEDULE_DELAY_MIN`).
 4. Service → **Settings → Networking → Generate Domain**. Open that link and sign in with any username and your password.
 5. Connect your WhatsApp numbers again by scanning the QR (logins from your PC don't carry over).
 
@@ -46,7 +46,7 @@ Keep the service at **1 replica**: two copies would each send every message. `ra
 
 The dashboard has four tabs across the top. Each tab has its own link, so the browser Back button works.
 
-- **This week**: every upcoming workshop and what it sends each day. Until setup is finished, a **Getting started** checklist at the top links to each step.
+- **This week**: **Lined up next** lists every message that will go out automatically (no approval needed), with a Preview button and a clear warning if something would stop it sending. Below that, the week grid shows each workshop day by day. Until setup is finished, a **Getting started** checklist at the top links to each step.
 - **Programmes**: the landing pages and their fact sheets. The badge shows how many are ready (e.g. `3/10`).
 - **WhatsApp numbers**: connect a number by scanning its QR. The badge turns red if none is connected. **↻ Resync** reconnects with the same login (no QR) and reloads its groups and communities. Use it after joining a new community, or if a number seems stuck. It also updates renamed groups in your workshops and warns about groups the number has left. The workshop editor has the same button next to the group list.
 - **Sent & activity**: every message that went out, plus the activity log. A red badge appears if any group failed.
@@ -74,13 +74,12 @@ If you save after today's hype time, today's message goes out within a minute. T
 
 Press **📅 Reschedule** on the workshop in **This week** (or open it and scroll to Reschedule) → enter the new date (and new time if it changed).
 
-- It's announced at **7 PM IST**, the daily check, so you can still cancel until then.
-- If you enter it after 7 PM, it goes out right away.
+- The "date changed" message goes out **5 minutes after you save**, so you can still cancel a mistake.
 - **Announce now** skips the wait.
-- While a reschedule is pending, the regular messages for that workshop pause.
+- While a reschedule is waiting, that workshop's regular messages pause.
 - After the announcement, the workshop moves to the new date and the daily hype continues toward it.
 
-To change the check time, set `RESCHEDULE_CHECK_TIME=19:00` in `.env`.
+To change the wait, set `RESCHEDULE_DELAY_MIN=5` in `.env` (or Railway Variables).
 
 ## How it avoids made-up content
 
@@ -91,7 +90,7 @@ To change the check time, set `RESCHEDULE_CHECK_TIME=19:00` in `.env`.
 - Form and Zoom links are inserted by code, never written by AI.
 - Each programme has its own **signature** (e.g. `*Team Akshat Dani*` + `akshatdani.com`), added by code as the last lines of every message. Edit it under **Programmes → View**.
 - Messages are written to build hype and FOMO so people show up live: a hook opening, what they'd miss, and a push to block the time. Scarcity ("limited seats", "no replay", deadlines) is only used if the landing page says it.
-- Messages aim for 70–110 words with 3–5 emojis. A draft that's too short or has no emojis is sent back to Claude to rewrite.
+- Messages aim for 70–110 words with 3–5 emojis, in short paragraphs. The workshop name, the date and time, and the biggest benefit are in *bold*, and the links sit under bold labels (📝 *Register here:*, 🎥 *Zoom link:*). A draft that's too short or has no emojis is sent back to Claude to rewrite.
 
 ## Good to know
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { db, save, newId, log } from './db.js';
 import { startAccount, accountStatus, listGroups, logoutAccount, sendText, resyncAccount } from './wa.js';
 import { fetchPageText, extractFacts, composeMessage, withLinks } from './ai.js';
-import { startScheduler, RESCHEDULE_CHECK } from './scheduler.js';
+import { startScheduler, RESCHEDULE_DELAY_MIN, lineup } from './scheduler.js';
 import { nowParts, phaseFor, prettyTime } from './time.js';
 import { resolve, timeLabelOf, displayName, syncWorkshopGroups } from './workshop.js';
 import { onRailway, storageIsTemporary, dataDir } from './paths.js';
@@ -52,7 +52,10 @@ app.get('/api/state', (req, res) => {
     now: { date, hm },
     aiReady: !!process.env.ANTHROPIC_API_KEY,
     storageWarning: storageIsTemporary(),
-    rescheduleCheck: RESCHEDULE_CHECK(),
+    nowMs: Date.now(),
+    tz: process.env.TIMEZONE || 'Asia/Kolkata',
+    rescheduleDelay: RESCHEDULE_DELAY_MIN(),
+    lineup: lineup(),
     programmes: d.programmes.map((p) => ({ ...p, pageText: undefined })),
     accounts: d.accounts.map((a) => ({ ...a, ...accountStatus(a.id) })),
     workshops: d.workshops.map((w) => ({ ...w, displayName: displayName(w), timeLabelShown: timeLabelOf(w), today: phaseFor(w, date) })),
@@ -140,16 +143,17 @@ app.delete('/api/workshops/:id', wrap((req, res) => {
   db().workshops = db().workshops.filter((w) => w.id !== req.params.id); save(); res.json({ ok: true });
 }));
 
-// Reschedule: saved now, announced at the daily check (7 PM) or immediately with sendNow
+// Reschedule: saved now, announced a few minutes later (so it can still be cancelled) or immediately with sendNow
 app.post('/api/workshops/:id/reschedule', wrap((req, res) => {
   const ws = findWs(req.params.id);
   const { date, startTime, timeLabel, sendNow } = req.body;
   if (!isDate(date)) throw new Error('Pick the new date');
   if (date < nowParts().date) throw new Error('The new date is in the past');
   if (date === ws.date && (!startTime || startTime === ws.startTime)) throw new Error('That is the same date and time');
-  ws.pendingReschedule = { date, startTime: startTime || '', timeLabel: timeLabel || '', sendNow: !!sendNow, enteredDate: nowParts().date, enteredAt: new Date().toISOString() };
+  const sendAt = new Date(Date.now() + (sendNow ? 0 : RESCHEDULE_DELAY_MIN() * 60_000)).toISOString();
+  ws.pendingReschedule = { date, startTime: startTime || '', timeLabel: timeLabel || '', sendNow: !!sendNow, enteredDate: nowParts().date, enteredAt: new Date().toISOString(), sendAt };
   save();
-  log('info', `${displayName(ws)}: reschedule to ${date} saved, ${sendNow ? 'announcing now' : `announcing at ${RESCHEDULE_CHECK()}`}`);
+  log('info', `${displayName(ws)}: reschedule to ${date} saved, ${sendNow ? 'announcing now' : `announcing in ${RESCHEDULE_DELAY_MIN()} min`}`);
   res.json(ws.pendingReschedule);
 }));
 app.delete('/api/workshops/:id/reschedule', wrap((req, res) => {
