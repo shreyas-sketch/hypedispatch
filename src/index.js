@@ -8,12 +8,23 @@ import { fetchPageText, extractFacts, composeMessage, withLinks } from './ai.js'
 import { startScheduler, RESCHEDULE_CHECK } from './scheduler.js';
 import { nowParts, phaseFor, prettyTime } from './time.js';
 import { resolve, timeLabelOf, displayName } from './workshop.js';
+import { onRailway, storageIsTemporary, dataDir } from './paths.js';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 // Optional password for the dashboard
+// Health check for Railway (before the password, and reveals nothing)
+app.get('/healthz', (req, res) => res.send('ok'));
+
+// Only this PC by default. On Railway (or with HOST=0.0.0.0) it's reachable by others, so a password is required.
+const HOST = process.env.HOST || (onRailway() ? '0.0.0.0' : '127.0.0.1');
+const isPublic = !['127.0.0.1', 'localhost', '::1'].includes(HOST);
 const PASS = process.env.DASHBOARD_PASSWORD;
+if (isPublic && !PASS) {
+  // Never expose the controls for your WhatsApp numbers without a password
+  app.use((req, res) => res.status(503).type('html').send('<h2>Hype Dispatch is locked</h2><p>Set a <code>DASHBOARD_PASSWORD</code> variable (on Railway: your service → Variables), then redeploy. Log in with any username and that password.</p>'));
+}
 if (PASS) {
   app.use((req, res, next) => {
     const [, b64] = (req.headers.authorization || '').split(' ');
@@ -40,6 +51,7 @@ app.get('/api/state', (req, res) => {
   res.json({
     now: { date, hm },
     aiReady: !!process.env.ANTHROPIC_API_KEY,
+    storageWarning: storageIsTemporary(),
     rescheduleCheck: RESCHEDULE_CHECK(),
     programmes: d.programmes.map((p) => ({ ...p, pageText: undefined })),
     accounts: d.accounts.map((a) => ({ ...a, ...accountStatus(a.id) })),
@@ -162,11 +174,11 @@ app.post('/api/workshops/:id/test', wrap(async (req, res) => {
 app.use((err, req, res, next) => res.status(err.status || 500).json({ error: err.expose ? err.message : 'Something went wrong' }));
 
 const PORT = Number(process.env.PORT || 4321);
-// Only this PC by default. Set HOST=0.0.0.0 (plus DASHBOARD_PASSWORD) to open it to your network.
-const HOST = process.env.HOST || '127.0.0.1';
 app.listen(PORT, HOST, async () => {
   console.log(`Hype Dispatch running → http://localhost:${PORT}`);
-  if (HOST !== '127.0.0.1' && HOST !== 'localhost' && !PASS) console.warn('Dashboard is reachable from your network with no password. Set DASHBOARD_PASSWORD in .env.');
+  console.log(`Data folder: ${dataDir()}`);
+  if (isPublic && !PASS) console.warn('Dashboard is reachable by others but DASHBOARD_PASSWORD is not set, so it is locked. Set it to unlock.');
+  if (storageIsTemporary()) console.warn('No Railway volume attached: workshops and WhatsApp logins will be lost on every redeploy. Attach a volume to this service.');
   if (!process.env.ANTHROPIC_API_KEY) console.warn('ANTHROPIC_API_KEY is missing in .env, AI drafting will fail.');
   for (const a of db().accounts) await startAccount(a.id).catch((e) => log('error', `Start ${a.name}: ${e.message}`));
   startScheduler();

@@ -124,6 +124,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     <a href="#history" data-go="history"><span class="long">Sent &amp; activity</span><span class="short">History</span> <span class="pill" id="tabHist" hidden></span></a>
   </nav>
   <span class="grow"></span>
+  <button id="storePill" class="pill bad" hidden onclick="toast('Railway wipes this server on every redeploy. Add a volume to the service (right-click it → Attach volume, any mount path) so workshops and WhatsApp logins are kept.')">Data not saved ⓘ</button>
   <button id="aiPill" class="pill" onclick="aiHelp()">AI</button>
   <span id="clock" class="pill"></span>
 </header>
@@ -292,7 +293,7 @@ async function api(path, opts = {}) {
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
-function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2800); }
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), Math.max(2800, m.length * 70)); }
 async function busy(btn, fn) { if (btn) btn.disabled = true; try { await fn(); } catch (e) { toast(e.message); } finally { if (btn) btn.disabled = false; } }
 const fmt12 = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Number); const a = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return m ? `${h}:${String(m).padStart(2, '0')} ${a}` : `${h} ${a}`; };
 const niceDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -309,7 +310,7 @@ function showView() {
 window.addEventListener('hashchange', showView);
 showView();
 function aiHelp() {
-  toast(S?.aiReady ? 'Claude is connected and ready.' : 'Open the .env file, paste your key after ANTHROPIC_API_KEY=, then restart Hype Dispatch.');
+  toast(S?.aiReady ? 'Claude is connected and ready.' : 'Open the .env file, paste your key after ANTHROPIC_API_KEY=, then restart Hype Dispatch. On Railway, add ANTHROPIC_API_KEY under the service\'s Variables instead.');
 }
 
 // First-run checklist on the week view; disappears once everything is set up
@@ -317,7 +318,7 @@ function renderSetup() {
   const ready = S.programmes.filter((p) => p.factSheet).length;
   const connected = S.accounts.filter((a) => a.status === 'connected').length;
   const steps = [
-    { done: S.aiReady, title: 'Add your Anthropic key', text: 'Paste it in the .env file after ANTHROPIC_API_KEY=, then restart.', btn: '' },
+    { done: S.aiReady, title: 'Add your Anthropic key', text: 'Paste it in the .env file after ANTHROPIC_API_KEY= and restart (on Railway: add it under Variables).', btn: '' },
     { done: connected > 0, title: 'Connect a WhatsApp number', text: S.accounts.length ? 'A number is added but not connected yet. Scan its QR.' : 'Scan a QR from your phone once.', btn: `<button class="small" onclick="go('numbers')">Open WhatsApp numbers</button>` },
     { done: ready > 0, title: 'Build fact sheets', text: `${ready} of ${S.programmes.length} programmes ready. Each is built once from its landing page.`, btn: `<button class="small" onclick="go('programmes')">Open Programmes</button>` },
     { done: S.workshops.length > 0, title: 'Add your first workshop', text: 'Pick the programme, date, links and community.', btn: `<button class="small primary" onclick="openEditor()">+ New workshop</button>` },
@@ -419,6 +420,7 @@ function renderSends() {
 async function refresh() {
   S = await api('/api/state');
   $('clock').textContent = `${S.now.date} · ${S.now.hm} IST`;
+  $('storePill').hidden = !S.storageWarning;
   $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
   $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key ⓘ';
   document.querySelectorAll('#rchk,.rchk').forEach((el) => { el.textContent = fmt12(S.rescheduleCheck); });

@@ -2,15 +2,17 @@
 import fs from 'fs';
 import path from 'path';
 import { SEED_PROGRAMMES } from './seed.js';
+import { dataDir } from './paths.js';
 
-const DIR = path.resolve('data');
-const FILE = path.join(DIR, 'db.json');
+let DIR, FILE;
 const EMPTY = { programmes: [], accounts: [], workshops: [], sends: [], history: {} };
 
 let cache = null;
 
 export function db() {
   if (cache) return cache;
+  DIR = dataDir();
+  FILE = path.join(DIR, 'db.json');
   fs.mkdirSync(DIR, { recursive: true });
   cache = fs.existsSync(FILE)
     ? { ...structuredClone(EMPTY), ...JSON.parse(fs.readFileSync(FILE, 'utf8')) }

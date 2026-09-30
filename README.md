@@ -29,6 +29,19 @@ Auto-sends daily messages to your workshop WhatsApp communities, written by Clau
 
 The PC must stay on and awake at send times (Settings → Power → Sleep: Never).
 
+## Or: run it on Railway (no PC needed)
+
+1. In Railway: **New Project → Deploy from GitHub repo** → pick this repo (and the branch you want).
+2. **Attach a volume** to the service: right-click the service → **Attach volume**, mount path `/data`. Without it, every redeploy wipes your workshops and WhatsApp logins (the dashboard shows a red **Data not saved** badge until you add it).
+3. Service → **Variables**, add:
+   - `ANTHROPIC_API_KEY`: your key
+   - `DASHBOARD_PASSWORD`: required. Until it's set, the dashboard stays locked, because anyone with the link could otherwise send from your numbers.
+   - Optional: any other setting from `.env.example` (e.g. `RESCHEDULE_CHECK_TIME`).
+4. Service → **Settings → Networking → Generate Domain**. Open that link and sign in with any username and your password.
+5. Connect your WhatsApp numbers again by scanning the QR (logins from your PC don't carry over).
+
+Keep the service at **1 replica**: two copies would each send every message. `railway.json` sets the start command and health check (`/healthz`). All times stay in IST whatever region Railway uses. WhatsApp is more likely to flag numbers linked from cloud servers than from a home PC, so start with a number you can afford to lose.
+
 ## Finding your way
 
 The dashboard has four tabs across the top. Each tab has its own link, so the browser Back button works.

@@ -8,11 +8,12 @@ import QRCode from 'qrcode';
 import fs from 'fs';
 import path from 'path';
 import { log } from './db.js';
+import { dataDir } from './paths.js';
 
 const sessions = new Map(); // accountId -> { sock, status, qr, me }
 const authDir = (id) => {
   if (!/^[a-z0-9]+$/i.test(id || '')) throw new Error('Bad account id'); // never let an id escape data/auth
-  return path.resolve('data', 'auth', id);
+  return path.join(dataDir(), 'auth', id);
 };
 
 export function accountStatus(id) {
