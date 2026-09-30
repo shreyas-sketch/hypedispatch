@@ -29,6 +29,17 @@ Auto-sends daily messages to your workshop WhatsApp communities, written by Clau
 
 The PC must stay on and awake at send times (Settings → Power → Sleep: Never).
 
+## Finding your way
+
+The dashboard has four tabs across the top. Each tab has its own link, so the browser Back button works.
+
+- **This week**: every upcoming workshop and what it sends each day. Until setup is finished, a **Getting started** checklist at the top links to each step.
+- **Programmes**: the landing pages and their fact sheets. The badge shows how many are ready (e.g. `3/10`).
+- **WhatsApp numbers**: connect or reconnect a number by scanning its QR. The badge turns red if none is connected.
+- **Sent & activity**: every message that went out, plus the activity log. A red badge appears if any group failed.
+
+Warnings on a workshop are buttons: **Fact sheet missing** opens that programme, **No community picked** opens the workshop at the community step. Click a workshop's name (or tab to it and press Enter) to edit, reschedule or preview it.
+
 ## First time: build the 10 fact sheets
 
 All 10 landing pages are already listed under **Programmes** (if you delete or rename one, it stays that way). For each one, press **Build → Read landing page**, then look over the fact sheet and fix anything wrong. You do this once per programme and it's reused every week. Rebuild it only if the landing page changes.

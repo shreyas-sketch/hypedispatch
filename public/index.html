@@ -30,7 +30,7 @@ main{max-width:1180px;margin:0 auto;padding:24px 28px 80px;display:grid;gap:20px
 .card h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media (max-width:860px){.cols{grid-template-columns:1fr}main{padding:16px}header{padding:14px 16px}}
+@media (max-width:860px){.cols{grid-template-columns:1fr}main{padding:16px}header{padding:12px 16px;flex-wrap:wrap}header .tabs{order:3;width:100%}}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--line);color:var(--muted)}
 .pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.bad{background:var(--bad-soft);color:var(--bad)}
 .pill.reschedule{background:var(--warn-soft);color:var(--warn)}
@@ -39,6 +39,7 @@ button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(
 button:hover{border-color:var(--muted)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+button.ghost.danger{color:var(--bad);margin-left:6px}
 button.small{padding:5px 10px;font-size:12px}
 button:disabled{opacity:.5;cursor:wait}
 input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
@@ -87,6 +88,28 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
 .prog:first-child{border-top:0}
 .prog a{color:var(--muted);font-size:12px;text-decoration:none;word-break:break-all}
 .pending{background:var(--warn-soft);border-radius:12px;padding:12px 14px}
+main>*,.cols>*{min-width:0} /* let wide tables scroll inside their card instead of widening the page */
+.tabs .short{display:none}
+@media (max-width:600px){.tabs .long{display:none}.tabs .short{display:inline}.tabs a{padding:8px 10px}.setup li{flex-wrap:wrap}.setup li button{margin-left:36px}}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs a{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:10px;color:var(--muted);font-weight:600;text-decoration:none;white-space:nowrap}
+.tabs a:hover{color:var(--ink);background:var(--bg)}
+.tabs a.on{color:var(--ink);background:var(--bg);box-shadow:inset 0 -2px 0 var(--accent)}
+.tabs .pill{padding:1px 8px;font-size:11px}
+[data-tab]{display:none}
+body[data-view="week"] [data-tab~="week"],body[data-view="programmes"] [data-tab~="programmes"],
+body[data-view="numbers"] [data-tab~="numbers"],body[data-view="history"] [data-tab~="history"]{display:block}
+body[data-view="history"] .cols[data-tab~="history"]{display:grid}
+.setup ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.setup li{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
+.setup li.done{opacity:.6}
+.setup .tick{width:24px;height:24px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--accent-soft);color:var(--accent)}
+.setup li.done .tick{background:var(--ok-soft);color:var(--ok)}
+button.pill{border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600}
+button.pill:hover{filter:brightness(.95);text-decoration:underline}
+.week td.name:focus-visible,.tabs a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hint{background:var(--accent-soft);border-radius:10px;padding:10px 12px;font-size:13px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;opacity:0;transition:.2s;pointer-events:none;z-index:99}
 .toast.show{opacity:1}
 </style>
@@ -94,13 +117,21 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
 <body>
 <header>
   <h1>Hype<span>.</span>Dispatch</h1>
+  <nav class="tabs" aria-label="Sections">
+    <a href="#week" data-go="week"><span class="long">This week</span><span class="short">Week</span></a>
+    <a href="#programmes" data-go="programmes">Programmes <span class="pill" id="tabProg"></span></a>
+    <a href="#numbers" data-go="numbers"><span class="long">WhatsApp numbers</span><span class="short">Numbers</span> <span class="pill" id="tabNum"></span></a>
+    <a href="#history" data-go="history"><span class="long">Sent &amp; activity</span><span class="short">History</span> <span class="pill" id="tabHist" hidden></span></a>
+  </nav>
   <span class="grow"></span>
-  <span id="aiPill" class="pill">AI</span>
+  <button id="aiPill" class="pill" onclick="aiHelp()">AI</button>
   <span id="clock" class="pill"></span>
 </header>
 
 <main>
-  <section class="card">
+  <section class="card setup" id="setup" data-tab="week" hidden></section>
+
+  <section class="card" data-tab="week">
     <div class="row" style="margin-bottom:14px">
       <h2 style="margin:0">This week</h2>
       <span class="muted small">What each workshop sends, day by day (IST)</span>
@@ -116,47 +147,48 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" data-tab="programmes">
     <div class="row" style="margin-bottom:6px">
       <h2 style="margin:0">Programmes</h2>
-      <span class="muted small">One per landing page. Build each fact sheet once, reuse it every week.</span>
+      <span class="muted small" id="progSummary">One per landing page. Build each fact sheet once, reuse it every week.</span>
       <span class="grow"></span>
       <button class="small" onclick="openProg()">+ Add programme</button>
     </div>
     <div id="progs"></div>
   </section>
 
-  <div class="cols">
-    <section class="card">
+  <section class="card" data-tab="numbers">
       <h2>WhatsApp numbers</h2>
+      <p class="muted small" style="margin:-6px 0 12px">Each number you connect can send to the groups and communities it's in. On your phone: WhatsApp → Linked devices → Link a device, then scan the QR that appears here.</p>
       <div id="accounts"></div>
       <div class="row" style="margin-top:12px">
         <input id="accName" placeholder="Label, e.g. Workshop number 1" style="flex:1">
         <button onclick="addAccount()">Connect number</button>
       </div>
+  </section>
+
+  <div class="cols" data-tab="history">
+    <section class="card">
+      <h2>Sent messages</h2>
+      <div id="sends"></div>
     </section>
     <section class="card">
       <h2>Activity</h2>
       <div class="log" id="log"></div>
     </section>
   </div>
-
-  <section class="card">
-    <h2>Sent messages</h2>
-    <div id="sends"></div>
-  </section>
 </main>
 
 <!-- Programme editor -->
 <dialog id="progDlg">
   <div class="dhead"><h3 id="pTitle">Programme</h3><span class="grow"></span>
-    <button class="ghost" id="pDel" onclick="delProg()">Delete</button>
     <button class="ghost" onclick="progDlg.close()">Close</button>
     <button class="primary" onclick="busy(null, () => saveProg())">Save</button>
+    <button class="ghost danger" id="pDel" onclick="delProg()">Delete</button>
   </div>
   <div class="dbody">
     <div class="form">
-      <label class="span2">Name<input id="p_name"></label>
+      <label class="span2">Name<input id="p_name" autofocus></label>
       <label class="span2">Landing page URL<input id="p_landingUrl"></label>
       <label class="span4">Focus (optional, if the page has more than one offer)<input id="p_focus" placeholder="e.g. The AI for business owners masterclass only"></label>
     </div>
@@ -177,15 +209,15 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
 <!-- Workshop editor -->
 <dialog id="editor">
   <div class="dhead"><h3 id="edTitle">New workshop</h3><span class="grow"></span>
-    <button class="ghost" id="delBtn" onclick="delWorkshop()">Delete</button>
     <button class="ghost" onclick="editor.close()">Close</button>
     <button class="primary" onclick="saveWorkshop()">Save</button>
+    <button class="ghost danger" id="delBtn" onclick="delWorkshop()">Delete</button>
   </div>
   <div class="dbody">
     <div class="section">
       <h4><span class="step">1</span>Which workshop, when</h4>
       <div class="form">
-        <label class="span2">Programme<select id="f_programmeId"></select></label>
+        <label class="span2">Programme<select id="f_programmeId" autofocus></select></label>
         <label>Workshop date<input id="f_date" type="date"></label>
         <label>Starts at (IST)<input id="f_startTime" type="time"></label>
         <label class="span2">Time as written in messages <span class="muted" style="font-weight:400">(optional)</span><input id="f_timeLabel" placeholder="Blank = start time + IST, e.g. 7 PM IST"></label>
@@ -202,7 +234,7 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
     </div>
 
     <div class="section">
-      <h4><span class="step">2</span>Community to send to</h4>
+      <h4 id="secGroups"><span class="step">2</span>Community to send to</h4>
       <p class="muted small" style="margin:0 0 10px">Once you pick the community and save, messages go out automatically every day until the workshop.</p>
       <div class="row" style="margin-bottom:10px">
         <select id="f_account" style="max-width:260px" onchange="loadGroups()"></select>
@@ -266,6 +298,52 @@ const fmt12 = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Numbe
 const niceDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const progById = (id) => S.programmes.find((p) => p.id === id);
 
+// ---------- navigation (tabs follow the URL hash, so Back works) ----------
+const VIEWS = ['week', 'programmes', 'numbers', 'history'];
+function go(view) { if (location.hash !== '#' + view) location.hash = view; else showView(); }
+function showView() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'week';
+  document.body.dataset.view = v;
+  document.querySelectorAll('.tabs a').forEach((a) => { const on = a.dataset.go === v; a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); });
+}
+window.addEventListener('hashchange', showView);
+showView();
+function aiHelp() {
+  toast(S?.aiReady ? 'Claude is connected and ready.' : 'Open the .env file, paste your key after ANTHROPIC_API_KEY=, then restart Hype Dispatch.');
+}
+
+// First-run checklist on the week view; disappears once everything is set up
+function renderSetup() {
+  const ready = S.programmes.filter((p) => p.factSheet).length;
+  const connected = S.accounts.filter((a) => a.status === 'connected').length;
+  const steps = [
+    { done: S.aiReady, title: 'Add your Anthropic key', text: 'Paste it in the .env file after ANTHROPIC_API_KEY=, then restart.', btn: '' },
+    { done: connected > 0, title: 'Connect a WhatsApp number', text: S.accounts.length ? 'A number is added but not connected yet. Scan its QR.' : 'Scan a QR from your phone once.', btn: `<button class="small" onclick="go('numbers')">Open WhatsApp numbers</button>` },
+    { done: ready > 0, title: 'Build fact sheets', text: `${ready} of ${S.programmes.length} programmes ready. Each is built once from its landing page.`, btn: `<button class="small" onclick="go('programmes')">Open Programmes</button>` },
+    { done: S.workshops.length > 0, title: 'Add your first workshop', text: 'Pick the programme, date, links and community.', btn: `<button class="small primary" onclick="openEditor()">+ New workshop</button>` },
+  ];
+  const left = steps.filter((x) => !x.done).length;
+  $('setup').hidden = !left;
+  if (!left) return;
+  $('setup').innerHTML = `<h2>Getting started <span class="pill">${steps.length - left} of ${steps.length} done</span></h2><ol>${steps.map((x, i) => `
+    <li class="${x.done ? 'done' : ''}"><span class="tick">${x.done ? '✓' : i + 1}</span>
+      <div class="grow"><div style="font-weight:600">${x.title}</div><div class="small muted">${x.text}</div></div>${x.done ? '' : x.btn}</li>`).join('')}</ol>`;
+}
+
+function renderTabs() {
+  const ready = S.programmes.filter((p) => p.factSheet).length;
+  $('tabProg').textContent = `${ready}/${S.programmes.length}`;
+  $('tabProg').className = 'pill ' + (ready === S.programmes.length ? 'ok' : ready ? '' : 'bad');
+  const connected = S.accounts.filter((a) => a.status === 'connected').length;
+  $('tabNum').textContent = S.accounts.length ? `${connected}/${S.accounts.length} on` : 'none';
+  $('tabNum').className = 'pill ' + (S.accounts.length && connected === S.accounts.length ? 'ok' : connected ? 'warn' : 'bad');
+  const failed = S.sends.filter((s) => Object.values(s.results || {}).some((r) => !r.ok)).length;
+  $('tabHist').hidden = !failed;
+  $('tabHist').textContent = `${failed} failed`;
+  $('tabHist').className = 'pill bad';
+  $('progSummary').textContent = `${ready} of ${S.programmes.length} fact sheets ready. Build each once from its landing page, reuse it every week.`;
+}
+
 // ---------- main view ----------
 const PHASE_LABEL = { hype: 'Hype', tomorrow: 'Tomorrow', dayof: 'Live today', reschedule: 'Rescheduled' };
 function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
@@ -275,14 +353,15 @@ function phaseOn(w, day) { if (w.firstSendDate && day < w.firstSendDate && day !
 function renderWeek() {
   const days = [...Array(7)].map((_, i) => addDays(S.now.date, i));
   const ws = S.workshops.filter((w) => w.date >= S.now.date || w.pendingReschedule).sort((a, b) => a.date.localeCompare(b.date));
-  if (!ws.length) { $('week').innerHTML = '<div class="empty">No upcoming workshops yet. Add one to start the daily hype.</div>'; return; }
+  if (!ws.length) { $('week').innerHTML = '<div class="empty">No upcoming workshops yet. Add one to start the daily hype.<div style="margin-top:10px"><button class="primary" onclick="openEditor()">+ New workshop</button></div></div>'; return; }
   const head = days.map((d, i) => `<th class="${i ? '' : 'today'}">${i ? niceDate(d) : 'Today'}</th>`).join('');
   const rows = ws.map((w) => {
     const prog = progById(w.programmeId);
     const pr = w.pendingReschedule;
     const warn = pr ? `<span class="pill reschedule">→ ${niceDate(pr.date)} ${pr.sendNow ? 'announcing now' : 'at ' + S.rescheduleCheck}</span>`
-      : !prog?.factSheet ? '<span class="pill bad">Fact sheet missing</span>'
-      : !w.groups?.length ? '<span class="pill warn">No community picked</span>'
+      : !prog ? '<span class="pill bad">Programme deleted</span>'
+      : !prog.factSheet ? `<button class="pill bad" onclick="event.stopPropagation();openProg('${prog.id}')" title="Open this programme to build its fact sheet">Fact sheet missing · Build →</button>`
+      : !w.groups?.length ? `<button class="pill warn" onclick="event.stopPropagation();openEditor('${w.id}','groups')" title="Pick the community to send to">No community picked · Pick →</button>`
       : w.active === false ? '<span class="pill">Paused</span>'
       : `<span class="pill ok">Auto · ${w.groups.length} group${w.groups.length > 1 ? 's' : ''}</span>`;
     const cells = days.map((d) => {
@@ -296,7 +375,7 @@ function renderWeek() {
       const sent = S.sends.find((s) => s.key === `${w.id}|${d}|${p}` && s.done);
       return `<td class="cell"><span class="pill ${p}">${sent ? '✓ ' : ''}${PHASE_LABEL[p]}</span><div class="t">${t || ''}</div>${p === 'dayof' ? '<div class="star">★ ' + fmt12(w.startTime) + '</div>' : ''}</td>`;
     }).join('');
-    return `<tr><td class="name" onclick="openEditor('${w.id}')">${esc(w.displayName)}<div class="small muted">${niceDate(w.date)} · ${esc(w.timeLabelShown)}</div><div style="margin-top:4px">${warn}</div></td>${cells}</tr>`;
+    return `<tr><td class="name" tabindex="0" role="button" title="Open to edit, reschedule or preview" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}">${esc(w.displayName)}<div class="small muted">${niceDate(w.date)} · ${esc(w.timeLabelShown)}</div><div style="margin-top:4px">${warn}</div></td>${cells}</tr>`;
   }).join('');
   $('week').innerHTML = `<table><thead><tr><th>Workshop</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -341,9 +420,9 @@ async function refresh() {
   S = await api('/api/state');
   $('clock').textContent = `${S.now.date} · ${S.now.hm} IST`;
   $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
-  $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key';
+  $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key ⓘ';
   document.querySelectorAll('#rchk,.rchk').forEach((el) => { el.textContent = fmt12(S.rescheduleCheck); });
-  renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
+  renderTabs(); renderSetup(); renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
 }
 
 async function addAccount() { await busy(null, async () => { await api('/api/accounts', { method: 'POST', body: { name: $('accName').value } }); $('accName').value = ''; await refresh(); }); }
@@ -397,7 +476,7 @@ async function buildFacts() {
 
 // ---------- workshop editor ----------
 const F = ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'active', 'formLink', 'zoomLink', 'firstSendDate'];
-function openEditor(id) {
+function openEditor(id, focus) {
   cur = id ? S.workshops.find((w) => w.id === id) : null;
   const w = cur || { sendTime: '11:00', dayOf: true, dayOfTime: '10:00', active: true, date: addDays(S.now.date, 4), firstSendDate: S.now.date, startTime: '19:00' };
   $('f_programmeId').innerHTML = '<option value="">Choose…</option>' + S.programmes.map((p) => `<option value="${p.id}">${esc(p.name)}${p.factSheet ? '' : ' (fact sheet not built)'}</option>`).join('');
@@ -411,8 +490,9 @@ function openEditor(id) {
   ['r_date', 'r_startTime', 'r_timeLabel'].forEach((k) => { $(k).value = ''; });
   $('r_startTime').value = w.startTime || '';
   renderReschedule();
-  if (w.account) loadGroups(); else renderGroups();
+  loadGroups();
   editor.showModal();
+  if (focus === 'groups') { $('secGroups').scrollIntoView({ block: 'start' }); $('f_account').focus(); }
 }
 function checkFacts() {
   const p = progById($('f_programmeId').value);
@@ -474,7 +554,13 @@ async function cancelReschedule() {
 
 async function loadGroups() {
   const acc = $('f_account').value;
-  if (!acc) { allGroups = []; renderGroups(); return; }
+  if (!acc) {
+    allGroups = []; renderGroups();
+    if (!picked.size) $('groups').innerHTML = S.accounts.some((a) => a.status === 'connected')
+      ? '<div class="empty">Pick the sending number above to load its groups</div>'
+      : '<div class="empty">No WhatsApp number is connected yet. Save this workshop, then connect one on the <b>WhatsApp numbers</b> tab and come back.</div>';
+    return;
+  }
   $('groups').innerHTML = '<div class="empty">Loading groups…</div>';
   try { allGroups = await api(`/api/accounts/${acc}/groups`); }
   catch (e) { allGroups = []; $('groups').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
