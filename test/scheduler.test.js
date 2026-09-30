@@ -49,7 +49,7 @@ save();
 
 await at('2026-09-30T10:00:00'); assert.equal(dryRunSent.length, 0, 'nothing before send time');
 await at('2026-09-30T11:01:00'); assert.equal(dryRunSent.length, 2, 'hype to both groups');
-assert.ok(!dryRunSent[0].text.includes('http') && dryRunSent[0].text.includes('Sunday, 4 October'));
+assert.ok(dryRunSent[0].text.includes('https://forms.gle/x') && !dryRunSent[0].text.includes('zoom.us') && dryRunSent[0].text.includes('Sunday, 4 October'), 'hype has form link, no Zoom');
 await at('2026-09-30T11:30:00'); assert.equal(dryRunSent.length, 2, 'no duplicate same day');
 
 // Oct 1 morning: word comes in that it's moving to Oct 6, 8 PM
@@ -59,6 +59,7 @@ await at('2026-10-01T11:05:00'); assert.equal(dryRunSent.length, 2, 'regular hyp
 await at('2026-10-01T18:59:00'); assert.equal(dryRunSent.length, 2, 'not before 7 PM');
 await at('2026-10-01T19:00:00'); assert.equal(dryRunSent.length, 4, 'reschedule announced at 7 PM');
 const ann = dryRunSent[2].text;
+assert.ok(ann.includes('https://forms.gle/x') && !ann.includes('zoom.us'), 'reschedule has form link, no Zoom');
 assert.ok(ann.includes('Tuesday, 6 October') && ann.includes('8 PM IST') && ann.includes('Sunday, 4 October'), ann);
 assert.equal(d.workshops[0].date, '2026-10-06');
 assert.ok(!d.workshops[0].pendingReschedule);

@@ -39,14 +39,21 @@ assert.ok(validate(good.replace('3 AI', '12 AI'), wsPrice, 'hype').some((i) => i
 
 // Links added by code only
 assert.ok(withLinks('x', ws, 'tomorrow').includes(ws.formLink) && withLinks('x', ws, 'tomorrow').includes(ws.zoomLink));
-assert.ok(!withLinks('x', ws, 'hype').includes('http'));
+assert.ok(withLinks('x', ws, 'hype').includes(ws.formLink) && !withLinks('x', ws, 'hype').includes(ws.zoomLink), 'hype: form only');
+assert.ok(withLinks('x', ws, 'reschedule').includes(ws.formLink) && !withLinks('x', ws, 'reschedule').includes(ws.zoomLink), 'reschedule: form only');
+assert.equal(withLinks('x', { ...ws, formLink: '' }, 'hype'), 'x', 'no form link set: nothing added');
 assert.ok(withLinks('x', ws, 'dayof').includes(ws.zoomLink) && !withLinks('x', ws, 'dayof').includes(ws.formLink));
 
 // Fallback templates stay factual
 for (const p of ['hype', 'tomorrow', 'dayof']) {
   const f = fallback(ws, p);
   assert.ok(f.includes('AI Income Workshop'), p);
+  assert.ok(!/https?:/.test(f), 'templates never contain links themselves');
 }
+assert.ok(fallback(ws, 'hype').includes('Fill in the form below'));
+assert.ok(fallback(ws, 'tomorrow').includes('Form and Zoom link below'));
+assert.ok(fallback(ws, 'dayof').includes('Zoom link below') && !fallback(ws, 'dayof').includes('orm'));
+assert.ok(!fallback({ ...ws, formLink: '' }, 'hype').includes('below'), 'no form link: no "below" line');
 
 // With a bad key / unreachable API, pipeline falls back instead of crashing (offline, so the test is fast)
 process.env.ANTHROPIC_API_KEY = 'sk-bad';

@@ -141,10 +141,10 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     </div>
     <div class="week" id="week"></div>
     <div class="row small muted" style="margin-top:12px;gap:14px">
-      <span><span class="pill hype">Hype</span> build excitement</span>
+      <span><span class="pill hype">Hype</span> + form link</span>
       <span><span class="pill tomorrow">Tomorrow</span> + form & Zoom link</span>
       <span><span class="pill dayof">Live today</span> + Zoom link</span>
-      <span><span class="pill reschedule">Rescheduled</span> announced at <b id="rchk">7 PM</b></span>
+      <span><span class="pill reschedule">Rescheduled</span> + form link, announced at <b id="rchk">7 PM</b></span>
     </div>
   </section>
 
@@ -228,7 +228,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
         <label>Day-of message at<input id="f_dayOfTime" type="time"></label>
         <label>Status<select id="f_active"><option value="true">Active (auto-send)</option><option value="false">Paused</option></select></label>
         <label>Name <span class="muted" style="font-weight:400">(optional)</span><input id="f_name" placeholder="Auto"></label>
-        <label class="span2">Form link (sent the day before)<input id="f_formLink" placeholder="https://forms..."></label>
+        <label class="span2">Form link (every message except the workshop day)<input id="f_formLink" placeholder="https://forms..."></label>
         <label class="span2">Zoom link (day before + day of)<input id="f_zoomLink" placeholder="https://zoom.us/j/..."></label>
       </div>
       <div id="factWarn" class="small" style="margin-top:8px;color:var(--bad)"></div>

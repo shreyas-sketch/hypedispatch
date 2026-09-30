@@ -107,7 +107,7 @@ export async function runReschedule(ws, date) {
   Object.assign(ws, { date: next.date, startTime: next.startTime, timeLabel: next.timeLabel });
   ws.reschedules = [...(ws.reschedules || []), { from: old.date, to: next.date, at: new Date().toISOString() }];
   delete ws.pendingReschedule;
-  const rec = newRecord(ws, `${ws.id}|${date}|reschedule`, date, 'reschedule', out.text, out);
+  const rec = newRecord(ws, `${ws.id}|${date}|reschedule`, date, 'reschedule', withLinks(out.text, ws, 'reschedule'), out);
   rec.fromDate = old.date;
   d.history[ws.id] = [...(d.history[ws.id] || []), out.text].slice(-12);
   save();

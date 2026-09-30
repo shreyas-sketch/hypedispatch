@@ -90,11 +90,9 @@ Pick ONE angle from the fact sheet (a specific thing they'll learn, an outcome, 
 Do NOT write a countdown: no "X days left", "X days to go", no day counts at all. It must feel like genuine excitement, not a timer.
 You may mention the date/time casually if it fits.`,
   tomorrow: `The workshop is TOMORROW. "It's dropping tomorrow" energy.
-Mention it's tomorrow and the time (from the fact sheet). Tease 1-2 things they'll get.
-End with a short line telling them the form and Zoom link are below (the links are added automatically, do not write any link).`,
+Mention it's tomorrow and the time (from the fact sheet). Tease 1-2 things they'll get.`,
   dayof: `The workshop is TODAY. "We're live today" energy.
-Mention the time (from the fact sheet). Remind them to show up on time and be ready.
-End with a short line saying the Zoom link is below (added automatically, do not write any link).`,
+Mention the time (from the fact sheet). Remind them to show up on time and be ready.`,
   reschedule: `The workshop has been RESCHEDULED from old_date_text/old_time_text to the new date_text/time_text in the fact sheet.
 Announce the new date and time clearly in the first line. Brief, warm apology for the change (one short phrase, no reason given, never invent a reason).
 Keep the excitement: remind them of one thing they'll get. Tell them to update their calendar.`,
@@ -125,6 +123,7 @@ export async function draftMessage(ws, phase, previous = [], feedback = '') {
         `FACT SHEET:\n${JSON.stringify(ws.factSheet, null, 2)}`,
         `The workshop date and time are ONLY what the fact sheet's date_text and time_text say.`,
         `TASK:\n${PHASE_BRIEF[phase]}`,
+        linkBrief(ws, phase),
         previous.length ? `PREVIOUS MESSAGES (do not repeat these):\n${previous.slice(-6).map((m, i) => `${i + 1}. ${m}`).join('\n\n')}\n(Any date in these may be outdated. Never copy dates from them.)` : '',
         feedback ? `Your last draft was rejected: ${feedback}. Fix that.` : '',
       ].filter(Boolean).join('\n\n'),
@@ -173,6 +172,29 @@ export function validate(msg, ws, phase) {
 }
 
 // ---------- 5. Safe fixed template if AI can't produce a clean one ----------
+// Which links go under each message:
+//   form link: every message except on the workshop day
+//   Zoom link: the day before and the workshop day
+export function linksFor(ws, phase) {
+  const out = [];
+  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '📝 Form', url: ws.formLink });
+  if ((phase === 'tomorrow' || phase === 'dayof') && ws.zoomLink) out.push({ kind: 'Zoom link', label: phase === 'dayof' ? '🎥 Join here' : '🎥 Zoom', url: ws.zoomLink });
+  return out;
+}
+
+function linkBrief(ws, phase) {
+  const kinds = linksFor(ws, phase).map((l) => l.kind);
+  if (!kinds.length) return 'Do not mention any form or link.';
+  return `End with a short line saying the ${kinds.join(' and ')} ${kinds.length > 1 ? 'are' : 'is'} below (added automatically, do not write any link).`;
+}
+
+function linkLine(ws, phase) {
+  const kinds = linksFor(ws, phase).map((l) => l.kind);
+  if (!kinds.length) return '';
+  const text = kinds.length > 1 ? 'Form and Zoom link' : kinds[0] === 'form' ? 'Fill in the form' : 'Zoom link';
+  return `\n\n${text} below 👇`;
+}
+
 export function fallback(ws, phase) {
   const f = ws.factSheet || {};
   const title = f.title || ws.name;
@@ -180,26 +202,20 @@ export function fallback(ws, phase) {
   const day = f.date_text || prettyDate(ws.date);
   const learn = f.what_youll_learn?.[0] || f.outcomes?.[0];
   if (phase === 'tomorrow') {
-    return `🔥 It's dropping *tomorrow*!\n\n*${title}* goes live ${day}${when ? `, ${when}` : ''}. Block your calendar now.\n\nForm and Zoom link below 👇`;
+    return `🔥 It's dropping *tomorrow*!\n\n*${title}* goes live ${day}${when ? `, ${when}` : ''}. Block your calendar now.${linkLine(ws, phase)}`;
   }
   if (phase === 'reschedule') {
-    return `📅 *Change of date*\n\n*${title}* is now on *${day}${when ? `, ${when}` : ''}* (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''}). Sorry for the shuffle!\n\nPlease update your calendar. Everything else stays the same, and we can't wait to see you there.`;
+    return `📅 *Change of date*\n\n*${title}* is now on *${day}${when ? `, ${when}` : ''}* (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''}). Sorry for the shuffle!\n\nPlease update your calendar. Everything else stays the same, and we can't wait to see you there.${linkLine(ws, phase)}`;
   }
   if (phase === 'dayof') {
-    return `🚀 *Today's the day!*\n\n*${title}* is live${when ? ` at ${when}` : ' today'}. Grab a notebook and join on time.\n\nZoom link below 👇`;
+    return `🚀 *Today's the day!*\n\n*${title}* is live${when ? ` at ${when}` : ' today'}. Grab a notebook and join on time.${linkLine(ws, phase)}`;
   }
-  return `✨ Getting ready for *${title}*!${learn ? `\n\nOne thing we'll dive into: ${learn}.` : ''}\n\nSee you on ${day}${when ? `, ${when}` : ''}. It's going to be a good one.`;
+  return `✨ Getting ready for *${title}*!${learn ? `\n\nOne thing we'll dive into: ${learn}.` : ''}\n\nSee you on ${day}${when ? `, ${when}` : ''}. It's going to be a good one.${linkLine(ws, phase)}`;
 }
 
 // Links are always added by code, never written by the AI
 export function withLinks(msg, ws, phase) {
-  const lines = [msg.trim()];
-  if (phase === 'tomorrow') {
-    if (ws.formLink) lines.push(`📝 Form: ${ws.formLink}`);
-    if (ws.zoomLink) lines.push(`🎥 Zoom: ${ws.zoomLink}`);
-  }
-  if (phase === 'dayof' && ws.zoomLink) lines.push(`🎥 Join here: ${ws.zoomLink}`);
-  return lines.join('\n\n');
+  return [msg.trim(), ...linksFor(ws, phase).map((l) => `${l.label}: ${l.url}`)].join('\n\n');
 }
 
 // Full pipeline: up to 3 AI attempts, then fallback

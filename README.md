@@ -4,10 +4,10 @@ Auto-sends daily messages to your workshop WhatsApp communities, written by Clau
 
 | When | What goes out | Links |
 |---|---|---|
-| 2+ days before | Hype message (new angle each day, never a countdown) | none |
+| 2+ days before | Hype message (new angle each day, never a countdown) | Form |
 | 1 day before | "Dropping tomorrow" | Form + Zoom |
-| Workshop day | "We're live today" (can be switched off per workshop) | Zoom |
-| Rescheduled | New date announcement, at the 7 PM check | none |
+| Workshop day | "We're live today" (can be switched off per workshop) | Zoom only |
+| Rescheduled | New date announcement, at the 7 PM check | Form |
 
 ## Setup (Windows, one time)
 
