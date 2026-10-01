@@ -59,6 +59,11 @@ export async function startAccount(id) {
     if (u.connection === 'close') {
       if (sessions.get(id) !== s) return; // number was removed or replaced, don't bring it back
       const code = u.lastDisconnect?.error?.output?.statusCode;
+      if (code === DisconnectReason.connectionReplaced) {
+        s.status = 'offline';
+        log('error', `WhatsApp ${id} was taken over by another session using the same login (is Hype Dispatch also running on another computer?). Stop the other copy, then press Resync.`, { kind: 'system' });
+        return;
+      }
       if (code === DisconnectReason.loggedOut) {
         s.status = 'offline';
         fs.rmSync(authDir(id), { recursive: true, force: true });

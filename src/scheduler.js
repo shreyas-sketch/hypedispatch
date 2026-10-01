@@ -53,9 +53,9 @@ export async function tick(now = new Date()) {
     // Once today's send time has passed, any reason for NOT sending is written to the activity log (once a day)
     const slot = phaseFor(ws, date).phase;
     const slotDue = slot && hm >= sendTimeFor(ws, slot);
-    const why = (reason) => slotDue && warnOnce(`${ws.id}|${date}|why`, 'warn',
+    const why = (reason, level = 'warn') => slotDue && warnOnce(`${ws.id}|${date}|why`, level,
       `${name}: today's ${PHASE_NAME[slot]} (${clock(sendTimeFor(ws, slot))}) was NOT sent: ${reason}`, { kind: 'notsent', workshopId: ws.id });
-    if (ws.active === false) { why('the workshop is paused (More settings → Sending)'); continue; }
+    if (ws.active === false) { why('the workshop is paused (More settings → Sending)', 'info'); continue; }
 
     // 1. Pending reschedule: hold everything else for this workshop until it's announced
     const pr = ws.pendingReschedule;
@@ -65,12 +65,13 @@ export async function tick(now = new Date()) {
       } else why(`a date change to ${pr.date} is waiting to be announced (at ${clock(nowParts(new Date(sendAtOf(pr))).hm)}); regular messages pause until then`);
       continue;
     }
-    // A reschedule went out today: finish delivering it, and skip regular messages today
+    // A reschedule went out today: finish delivering it. It replaces today's daily hype, but the
+    // day-before and workshop-day messages still go out (they carry the Zoom link).
     const rrec = d.sends.find((s) => s.workshopId === ws.id && s.phase === 'reschedule' && s.date === date);
     if (rrec) {
       if (!rrec.done && !notYet(rrec, now)) launch(rrec.key, () => deliver(ws, rrec, now), name);
-      why("the date-change announcement went out today instead");
-      continue;
+      if (slot === 'hype' || !slot) { why('the date-change announcement went out today instead', 'info'); continue; }
+      if (!rrec.done) continue; // send the announcement first
     }
 
     // 2. Regular daily message
@@ -79,7 +80,11 @@ export async function tick(now = new Date()) {
     if (!phase || !slotDue) continue;
     const key = `${ws.id}|${date}|${phase}`;
     const rec = d.sends.find((s) => s.key === key);
-    if (phase === 'dayof' && ws.startTime && hm >= ws.startTime && !rec) { why(`the workshop had already started (${clock(ws.startTime)}) when Hype Dispatch got to it`); continue; }
+    if (phase === 'dayof' && ws.startTime && hm >= ws.startTime && !rec?.done) {
+      if (rec) { rec.done = true; rec.note = 'stopped: the workshop had started'; save(); }
+      why(`the workshop had already started (${clock(ws.startTime)}) before it could go out`);
+      continue;
+    }
     if (!ws.groups?.length) { why('no WhatsApp groups are picked for it'); continue; }
     if (!ws.account) { why('no sending WhatsApp number is picked for it'); continue; }
     if (rec?.done || notYet(rec, now)) continue;
@@ -100,7 +105,7 @@ export function lineup(now = new Date(), days = 7) {
       : !orig.account ? 'No sending number picked'
       : !isConnected(orig.account) ? 'WhatsApp number not connected' : '';
     let ws = orig;
-    let skipToday = d.sends.some((s) => s.workshopId === orig.id && s.phase === 'reschedule' && s.date === today);
+    let skipToday = d.sends.some((s) => s.workshopId === orig.id && s.phase === 'reschedule' && s.date === today); // replaces today's hype only
     const pr = orig.pendingReschedule;
     if (pr) {
       const at = nowParts(new Date(Math.max(Date.parse(sendAtOf(pr)), now.getTime())));
@@ -111,7 +116,7 @@ export function lineup(now = new Date(), days = 7) {
     }
     for (let i = 0; i < days; i++) {
       const day = addDays(today, i);
-      if (i === 0 && skipToday) continue;
+      if (i === 0 && skipToday && phaseFor(ws, day).phase === 'hype') continue;
       if (ws.firstSendDate && day < ws.firstSendDate) continue;
       const { phase } = phaseFor(ws, day);
       if (!phase) continue;
@@ -119,7 +124,8 @@ export function lineup(now = new Date(), days = 7) {
       const rec = d.sends.find((s) => s.key === `${ws.id}|${day}|${phase}`);
       if (rec?.done) continue; // already sent
       if (i === 0 && phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // workshop already started
-      const failedNow = rec ? Object.values(rec.results || {}).filter((r) => !r.ok) : [];
+      const cur = new Set((ws.groups || []).map((g) => g.jid));
+      const failedNow = rec ? Object.entries(rec.results || {}).filter(([jid, r]) => !r.ok && cur.has(jid)).map(([, r]) => r) : [];
       const retry = rec?.waiting ? `${rec.waiting}, will send as soon as it reconnects`
         : failedNow.length ? `${failedNow.length} group${failedNow.length > 1 ? 's' : ''} failed (${failedNow[0].error}), retrying${rec.nextTryAt ? ` at ${nowParts(new Date(rec.nextTryAt)).hm}` : ''}` : '';
       out.push({ ...base, phase, date: day, time, links: linksFor(ws, phase).map((l) => l.kind), blocked, retry, due: i === 0 && hm >= time });
@@ -221,7 +227,8 @@ export async function deliver(ws, rec, now = new Date()) {
     save();
     await sleep(GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN));
   }
-  const failed = Object.values(rec.results).filter((r) => !r.ok);
+  const current = new Set((ws.groups || []).map((g) => g.jid));
+  const failed = Object.entries(rec.results).filter(([jid, r]) => !r.ok && current.has(jid)).map(([, r]) => r);
   rec.rounds = (rec.rounds || 0) + 1;
   rec.done = failed.length === 0 || rec.rounds >= MAX_ROUNDS;
   rec.nextTryAt = rec.done ? null : new Date(now.getTime() + RETRY_EVERY_MIN * 60_000).toISOString();

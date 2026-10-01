@@ -56,6 +56,22 @@ for (const p of ['hype', 'tomorrow', 'dayof', 'reschedule']) {
   assert.ok(!/regist|₹|price/i.test(t), p);
 }
 
+// Price filter: catches the workshop's price, but not normal business content
+{
+  const { mentionsPrice } = await import('../src/ai.js');
+  for (const t of ['Only ₹99!', 'just Rs 99', 'You got in for ₹99', 'Join for just ₹499', 'Worth ₹4,999, yours for ₹99', 'No workshop fee needed', 'It is completely for free', 'Rs. 99/- only'])
+    assert.ok(mentionsPrice(t), `price caught: ${t}`);
+  for (const t of ['Just 3 hours to change your business', 'Charge 5x higher fees to clients', 'Premium pricing strategies', 'Run paid ads that convert',
+    'Cut your costs by 30%', 'Get customers to buy again', 'Earn ₹50,000/month from consulting', 'Join us live at 7 PM'])
+    assert.ok(!mentionsPrice(t), `normal content allowed: ${t}`);
+  assert.ok(validate(good.replace('You are in. Now show up!', 'Register now and show up!'), ws, 'hype').some((i) => i.includes('register')));
+  assert.ok(!validate(good.replace('You are in. Now show up!', 'Get customers to buy again!'), ws, 'hype').some((i) => i.includes('register')), '"buy" as content is fine');
+  const { withoutPrice } = await import('../src/workshop.js');
+  assert.equal(withoutPrice({ title: 'AI Income Workshop @ ₹99 only' }).title, 'AI Income Workshop');
+  assert.equal(withoutPrice({ title: 'The 3-Hour AI Workshop' }).title, 'The 3-Hour AI Workshop');
+  assert.deepEqual(withoutPrice({ what_youll_learn: ['Premium pricing', 'Run paid ads', 'Just 3 hours'] }).what_youll_learn, ['Premium pricing', 'Run paid ads', 'Just 3 hours']);
+}
+
 // Numbers must match whole: "10" is not accepted because the fact sheet says "100"
 const ws100 = { ...ws, factSheet: { ...ws.factSheet, other_key_facts: ['100+ students trained'] } };
 assert.ok(validate(good.replace('3 AI', '10 AI'), ws100, 'hype').some((i) => i.includes('"10"')), 'part of a bigger number is not enough');

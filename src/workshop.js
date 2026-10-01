@@ -6,6 +6,8 @@ import { PRICE } from './ai.js';
 // Members have already paid, so price never goes into the messages: drop it from the facts Claude sees
 export function withoutPrice(facts) {
   const out = { ...facts, price_text: undefined };
+  // e.g. "AI Workshop @ ₹99" -> "AI Workshop"
+  if (typeof out.title === 'string') out.title = out.title.replace(/\s*(?:[-–|@:]|\bat\b|\bfor\b)?\s*(?:just|only)?\s*(?:₹|rs\.?|inr)\s?\d[\d,]*(?:\/-)?(?:\s*only)?/gi, '').trim() || out.title;
   for (const [k, v] of Object.entries(out)) {
     if (Array.isArray(v)) out[k] = v.filter((x) => !(typeof x === 'string' && (PRICE.test(x) || /\b99\b/.test(x))));
     else if (typeof v === 'string' && k !== 'title' && PRICE.test(v)) out[k] = undefined;

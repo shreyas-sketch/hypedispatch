@@ -422,7 +422,7 @@ function renderTabs() {
   const connected = S.accounts.filter((a) => a.status === 'connected').length;
   $('tabNum').textContent = S.accounts.length ? `${connected}/${S.accounts.length} on` : 'none';
   $('tabNum').className = 'pill ' + (S.accounts.length && connected === S.accounts.length ? 'ok' : connected ? 'warn' : 'bad');
-  const todayNotSent = S.log.filter((l) => l.kind === 'notsent' && new Date(l.at).toLocaleDateString('en-CA', { timeZone: S.tz }) === S.now.date).length;
+  const todayNotSent = S.log.filter((l) => l.kind === 'notsent' && l.level !== 'info' && new Date(l.at).toLocaleDateString('en-CA', { timeZone: S.tz }) === S.now.date).length;
   $('tabHist').hidden = !todayNotSent;
   $('tabHist').textContent = `${todayNotSent} today`;
   $('tabHist').className = 'pill bad';
@@ -550,7 +550,7 @@ function renderActivity() {
   const sendByKey = new Map(A.sends.map((x) => [x.key, x]));
   const rows = A.log.filter((l) => (!ws || l.workshopId === ws) && (!kind || l.kind === kind) && (!from || istDay(l.at) >= from)
     && (!q || l.msg.toLowerCase().includes(q) || (l.key && (sendByKey.get(l.key)?.text || '').toLowerCase().includes(q))));
-  const count = (k) => rows.filter((l) => l.kind === k).length;
+  const count = (k) => rows.filter((l) => l.kind === k && !(k === 'notsent' && l.level === 'info')).length;
   $('aSummary').innerHTML = rows.length ? `<span class="pill ok">✅ ${count('sent')} sent</span><span class="pill ${count('notsent') ? 'bad' : ''}">⛔ ${count('notsent')} not sent / problems</span><span class="pill">✏️ ${count('change')} changes</span>` : '';
   if (!rows.length) { $('activity').innerHTML = '<div class="empty">Nothing here for these filters</div>'; return; }
   let html = '', lastDay = '';
@@ -567,7 +567,7 @@ function renderActivity() {
         ${results.length ? `<div class="groupres">${results.map((r) => `<div>${r.ok ? '✅' : '❌'} ${esc(r.name)}${r.at ? ` · ${istTime(r.at)}` : ''}${r.error ? ` · <span style="color:var(--bad)">${esc(r.error)}</span>` : ''}</div>`).join('')}</div>` : ''}
         <div class="small muted" style="margin-top:4px">${rec.source === 'ai' ? 'Written by Claude' : 'Safe template'}${rec.rounds > 1 ? ` · ${rec.rounds} tries` : ''}</div></details>`
       : l.manualText ? `<details${open} ${track}><summary>Show message</summary><div class="preview" style="margin-top:6px">${waFormat(l.manualText)}</div></details>` : '';
-    html += `<div class="ev ${l.kind || ''}"><div class="tm">${istTime(l.at)}</div><div class="ic">${KIND_ICON[l.kind] || (l.level === 'error' ? '⛔' : '•')}</div><div class="body"><div>${esc(l.msg)}</div>${detail}</div></div>`;
+    html += `<div class="ev ${l.kind || ''}"><div class="tm">${istTime(l.at)}</div><div class="ic">${l.kind === 'notsent' && l.level === 'info' ? '⏸️' : KIND_ICON[l.kind] || (l.level === 'error' ? '⛔' : '•')}</div><div class="body"><div>${esc(l.msg)}</div>${detail}</div></div>`;
   }
   if (rows.length > 500) html += `<div class="empty">Showing the latest 500 of ${rows.length}. Narrow the filters to see older ones.</div>`;
   $('activity').innerHTML = html;
@@ -648,7 +648,7 @@ function openEditor(id, focus) {
   $('f_programmeId').innerHTML = '<option value="">Choose…</option>' + S.programmes.map((p) => `<option value="${p.id}">${esc(p.name)}${p.factSheet ? '' : ' (fact sheet not built)'}</option>`).join('');
   $('edTitle').textContent = cur ? cur.displayName : 'New workshop';
   $('delBtn').hidden = !cur;
-  for (const k of F) $('f_' + k).value = w[k] ?? '';
+  for (const k of F) $('f_' + k).value = k === 'dayOf' || k === 'active' ? String(w[k] !== false) : w[k] ?? ''; // missing = on, same as the scheduler
   $('f_programmeId').onchange = () => { checkFacts(); renderPlan(); }; checkFacts();
   $('moreSettings').open = !!cur && (cur.active === false || cur.dayOf === false);
   $('f_account').innerHTML = '<option value="">Choose sending number…</option>' + S.accounts.map((a) => `<option value="${a.id}" ${a.id === w.account ? 'selected' : ''}>${esc(a.name)} (${a.status})</option>`).join('');
@@ -683,6 +683,7 @@ function renderPlan() {
   if (v('active') === 'false') notes.push('⏸️ <b>Paused:</b> nothing will be sent until you switch Sending back on (More settings).');
   if (!picked.size) notes.push('⚠️ No groups picked yet, so nothing can be sent.');
   if (p && !p.factSheet) notes.push(`⚠️ ${esc(p.name)} has no fact sheet yet, so nothing can be sent.`);
+  if (v('dayOf') === 'true' && v('startTime') && (v('dayOfTime') || '10:00') >= v('startTime')) notes.push(`⚠️ The workshop-day message (${dayOfAt}) is set for after the start time (${fmt12(v('startTime'))}), so it would never go out. Change it under More settings.`);
   if (!form) notes.push('No bonus form link, so messages won\'t include one.');
   if (!zoom) notes.push('No Zoom link yet. Add it before the day-before message.');
   if (p?.signature) notes.push(`Every message ends with: ${waFormat(p.signature).replace(/\n/g, ' · ')}`);

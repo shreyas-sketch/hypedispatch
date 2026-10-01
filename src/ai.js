@@ -173,9 +173,18 @@ export function toWhatsApp(text) {
 const WORD_NUM = '(?:one|two|three|four|five|six|seven|eight|nine|ten)';
 const COUNTDOWN = new RegExp(`\\b(?:\\d+|${WORD_NUM})\\s+(?:more\\s+)?days?\\s+(?:left|to go|remaining|away)\\b|\\bdays? (?:left|remaining)\\b|\\bcountdown\\b`, 'i');
 
-// They've already paid to join: messages never talk money or ask them to sign up
-export const PRICE = /₹|\brs\.?\s*\d|\binr\b|\brupees?\b|\$\s*\d|\bprices?\b|\bpaid\b|\bfees?\b|\bpayment\b|\bdiscount|\bcosts?\b|\bjust \d|\bonly \d/i;
-const SELLING = /\b(register|registration|sign up|signup|enrol|enroll|buy|book your (seat|spot)|grab your (seat|spot)|reserve your (seat|spot))\b/i;
+// They've already paid to join: messages never mention the workshop's price or ask them to sign up.
+// Careful: words like "fees", "pricing", "paid ads", "costs" are normal workshop CONTENT, so only an
+// actual amount of money in a price context (or the 99 itself) counts as a price.
+const CURRENCY = /₹\s?\d|\brs\.?\s?\d|\binr\s?\d|\$\s?\d|\d\s?(?:\/-|rs\b|inr\b|rupees?\b)/i;
+const PRICE_CONTEXT = /\b(price|pricing|priced|fee|fees|pay|paid|payment|only|just|offer|discount|worth|ticket|register|registration|enrol|enroll|seat|access|entry|join|joined|joining)\b/i;
+export function mentionsPrice(s) {
+  if (/(?:₹|\brs\.?|\binr)\s?99\b|\b99\s?(?:\/-|rs\b|rupees?\b)/i.test(s)) return true;
+  if (/\b(?:workshop|ticket|entry|registration|joining|enrol?ment) (?:fee|price|cost)s?\b|\bfor free\b|\bfree of cost\b|\bfor just\s+(?:₹|rs)/i.test(s)) return true;
+  return s.split(/[.!?\n]/).some((x) => CURRENCY.test(x) && PRICE_CONTEXT.test(x));
+}
+export const PRICE = { test: mentionsPrice }; // used by withoutPrice()
+const SELLING = /\b(register (?:now|here|today|for)|registration (?:link|form)|sign ?up (?:now|here|today|for)|enrol+ (?:now|here|today)|buy (?:now|your|a) (?:seat|ticket|spot|pass)|(?:book|grab|reserve|secure) your (?:seat|spot))\b/i;
 
 export function sourceText(ws) {
   // Only the fact sheet (with this run's date/time) counts, never the raw page, whose dates are often stale

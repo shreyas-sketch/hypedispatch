@@ -74,6 +74,36 @@ assert.ok(rec().done);
 assert.equal(rec().rounds, 12);
 assert.ok(d.log.some((x) => x.level === 'error' && x.msg.includes('gave up on Group 3')));
 
+// 5. Removing a failing group from the workshop stops its retries
+dryRunFailing.clear(); dryRunSent.length = 0;
+d.workshops.push({ id: 'w5', programmeId: prog.id, date: '2026-10-09', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+  groups: [{ jid: 'ok@g.us', name: 'OK' }, { jid: 'bad@g.us', name: 'BAD' }], firstSendDate: '2026-09-01' });
+dryRunFailing.add('bad@g.us');
+await tick(new Date('2026-10-01T11:00:00+05:30')); await wait();
+d.workshops.find((w) => w.id === 'w5').groups = [{ jid: 'ok@g.us', name: 'OK' }];
+await tick(new Date('2026-10-01T11:05:00+05:30')); await wait();
+assert.ok(d.sends.find((s) => s.key === 'w5|2026-10-01|hype').done, 'removed group no longer retried');
+
+// 6. A workshop-day message held up by a disconnect is never sent after the workshop has started
+d.workshops.push({ id: 'w6', programmeId: prog.id, date: '2026-10-02', startTime: '19:00', sendTime: '11:00', dayOf: true, dayOfTime: '10:00', active: true, account: 'a6',
+  groups: [{ jid: 'w6@g.us', name: 'W6' }], firstSendDate: '2026-09-01' });
+dryRunOffline.add('a6');
+await tick(new Date('2026-10-02T10:00:00+05:30')); await wait();
+dryRunOffline.delete('a6');
+await tick(new Date('2026-10-02T20:30:00+05:30')); await wait();
+assert.ok(!dryRunSent.some((m) => m.jid === 'w6@g.us'), 'no late "we are live today" message');
+assert.ok(d.log.some((l) => l.workshopId === 'w6' && l.msg.includes('already started')));
+
+// 7. Rescheduled to TOMORROW: the date-change goes out, and the day-before reminder (with Zoom link) still goes out today
+d.workshops.push({ id: 'w7', programmeId: prog.id, date: '2026-10-08', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1', zoomLink: 'https://zoom.us/j/7',
+  groups: [{ jid: 'w7@g.us', name: 'W7' }], firstSendDate: '2026-09-01',
+  pendingReschedule: { date: '2026-10-04', sendNow: true, enteredDate: '2026-10-03' } });
+await tick(new Date('2026-10-03T15:00:00+05:30')); await wait();
+await tick(new Date('2026-10-03T15:01:00+05:30')); await wait();
+const w7 = dryRunSent.filter((m) => m.jid === 'w7@g.us');
+assert.equal(w7.length, 2, 'announcement + day-before reminder');
+assert.ok(!w7[0].text.includes('zoom.us') && w7[1].text.includes('https://zoom.us/j/7'), 'announcement first, then the reminder with the Zoom link');
+
 console.log('Delivery tests passed ✓');
 fake.close();
 process.exit(0);
