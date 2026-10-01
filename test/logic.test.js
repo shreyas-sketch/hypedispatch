@@ -19,7 +19,7 @@ assert.equal(phaseFor({ ...ws, dayOf: false }, '2026-10-04').phase, null);
 assert.deepEqual(nowParts(new Date('2026-09-30T20:00:00Z')), { date: '2026-10-01', hm: '01:30' });
 
 // Validator
-const good = '🤖 Imagine walking away from one evening with 3 AI automations you actually built yourself, not just watched someone else build on a screen.\n\nThat is the whole point of *AI Income Workshop*. Real builds, zero fluff, and a room full of people figuring it out right alongside you, asking the questions you were too shy to ask.\n\n✨ Bring your laptop, your curiosity and a couple of ideas you have been sitting on for a while.\n\n*Sunday, 7 PM IST*. See you there! 🚀';
+const good = '🤖 Imagine walking away with 3 AI automations you built yourself.\n\nNot watched. *Built.* By you, live, in one evening.\n\nThat is the whole point of *AI Income Workshop* 🔥\n\nReal builds. Zero fluff. A room full of people figuring it out with you.\n\n✨ Bring your laptop and that idea you have been sitting on.\n\nYou are in. Now show up!\n\n*Sunday, 7 PM IST*. See you there! 🚀';
 assert.deepEqual(validate(good, ws, 'hype'), []);
 assert.ok(validate(good.replace('3 AI', '10 AI'), ws, 'hype').some((i) => i.includes('"10"')), 'invented number caught');
 assert.ok(validate('Only 3 days left!! ' + good, ws, 'hype').some((i) => i.includes('countdown')), 'countdown caught');
@@ -38,12 +38,30 @@ assert.ok(validate(good.replace(/\*/g, ''), ws, 'hype').some((i) => i.includes('
 assert.equal(toWhatsApp('*A Workshop* is moving to *Tuesday, 6 October*'), '*A Workshop* is moving to *Tuesday, 6 October*', 'text between bold parts untouched');
 assert.equal(toWhatsApp('## Big news\n**AI Income Workshop** is on [our site](https://x.com)\n\n\n\nSee you'), 'Big news\n*AI Income Workshop* is on our site\n\nSee you');
 
+// Already-joined audience: no price, no "register", short paragraphs
+assert.ok(validate(good + ' All this for just ₹99!', ws, 'hype').some((i) => i.includes('price')), 'price caught');
+assert.ok(validate(good.replace('You are in. Now show up!', 'Register now and show up!'), ws, 'hype').some((i) => i.includes('register')), 'selling caught');
+assert.ok(validate(good.replace('\n\nReal builds.', ' Real builds.').replace('\n\nNot watched.', ' Not watched.').replace('\n\nThat is', ' That is'), ws, 'hype').some((i) => i.includes('paragraph')), 'long paragraph caught');
+{
+  const { withoutPrice } = await import('../src/workshop.js');
+  const f = withoutPrice({ title: 'X', price_text: '₹99 only', other_key_facts: ['Just ₹99 today', '3 live case studies', 'Usual fee Rs 4999'], bonuses: ['Free templates'] });
+  assert.equal(f.price_text, undefined);
+  assert.deepEqual(f.other_key_facts, ['3 live case studies']);
+  assert.deepEqual(f.bonuses, ['Free templates']);
+}
+for (const p of ['hype', 'tomorrow', 'dayof', 'reschedule']) {
+  const t = fallback({ ...ws, factSheet: { ...ws.factSheet, old_date_text: 'Saturday, 3 October', host: 'Akshat Dani' } }, p);
+  const longest = Math.max(...t.split(/\n\s*\n/).map((x) => x.split(/\s+/).filter(Boolean).length));
+  assert.ok(longest <= 25, `${p} template has short paragraphs (${longest})`);
+  assert.ok(!/regist|₹|price/i.test(t), p);
+}
+
 // Numbers must match whole: "10" is not accepted because the fact sheet says "100"
 const ws100 = { ...ws, factSheet: { ...ws.factSheet, other_key_facts: ['100+ students trained'] } };
 assert.ok(validate(good.replace('3 AI', '10 AI'), ws100, 'hype').some((i) => i.includes('"10"')), 'part of a bigger number is not enough');
 assert.deepEqual(validate(good.replace('3 AI', '100 AI'), ws100, 'hype'), [], 'exact number allowed');
 const wsPrice = { ...ws, factSheet: { ...ws.factSheet, price_text: '₹1,999', list: [1, 2] } };
-assert.deepEqual(validate(good + ' Just 1999.', wsPrice, 'hype'), [], '1,999 and 1999 match');
+assert.deepEqual(validate(good + ' 1999 of us.', wsPrice, 'hype'), [], '1,999 and 1999 match');
 assert.ok(validate(good.replace('3 AI', '12 AI'), wsPrice, 'hype').some((i) => i.includes('"12"')), 'numeric array [1,2] is not read as 12');
 
 // Links added by code only

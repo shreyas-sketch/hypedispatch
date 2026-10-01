@@ -18,8 +18,8 @@ const fake = http.createServer((req, res) => {
     prompts.push(user);
     const fs_ = JSON.parse(user.match(/FACT SHEET:\n([\s\S]*?)\n\n(?:The workshop|TASK)/)[1]);
     const text = user.includes('RESCHEDULED')
-      ? `📅 Quick change, friends! *${fs_.title}* is moving to *${fs_.date_text}, ${fs_.time_text}* (it was ${fs_.old_date_text}). Sorry for the shuffle.\n\n🙏 Please update your calendar, because everything we planned is still coming your way and it's going to be worth every minute you spend with us.\n\nSame energy, same content, same excitement, just a new slot on the calendar. We really can't wait to see you all there ✨`
-      : `🔥 Getting so excited for *${fs_.title}* on *${fs_.date_text} at ${fs_.time_text}*! We're going deep on real, practical stuff you can actually use the very next day.\n\n💡 Bring your questions, bring your curiosity, and bring that one problem you have been stuck on for a while now.\n\nLet's make it a great session together, one where you walk away with clarity and a plan you can start on straight away ✨`;
+      ? `📅 New date alert! *${fs_.title}* is moving.\n\nIt's now on *${fs_.date_text}, ${fs_.time_text}* (it was ${fs_.old_date_text}).\n\nSorry for the shuffle 🙏 Your spot is safe.\n\nSame content. Same energy. Just a new slot on the calendar.\n\n🔥 Everything we planned is still coming your way, and it is going to be worth every minute.\n\nUpdate your calendar right now ✨`
+      : `🔥 Getting so pumped for *${fs_.title}*!\n\nIt goes live *${fs_.date_text} at ${fs_.time_text}*.\n\nWe're going deep on real, practical stuff you can use the very next day.\n\n💡 Bring your questions. Bring your curiosity.\n\nBring that one problem you have been stuck on for a while.\n\nYou'll walk away with clarity and a plan you can start on straight away ✨`;
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model: j.model, content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }));
   });
@@ -79,7 +79,7 @@ const ann = dryRunSent[2].text;
 assert.ok(ann.includes('https://forms.gle/x') && !ann.includes('zoom.us'), 'reschedule has form link, no Zoom');
 assert.ok(prompts[0].includes('NOT a registration form') && prompts[0].includes('surprise bonus'), 'Claude is told what the form is for');
 assert.ok(ann.endsWith('*Team Akshat Dani*'), 'signature last');
-assert.ok(ann.includes('*High Value Consulting Workshop* is moving to *Tuesday, 6 October, 8 PM IST*'), 'bold kept intact');
+assert.ok(ann.includes("It's now on *Tuesday, 6 October, 8 PM IST*"), 'bold kept intact');
 assert.ok(d.sends.every((s) => s.source === 'ai'), 'fake Claude drafts pass the checks');
 assert.ok(ann.includes('Tuesday, 6 October') && ann.includes('8 PM IST') && ann.includes('Sunday, 4 October'), ann);
 assert.equal(d.workshops[0].date, '2026-10-06');

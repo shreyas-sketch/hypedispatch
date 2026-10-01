@@ -1,6 +1,17 @@
 // Joins a dated workshop run with its programme's fact sheet.
 import { db } from './db.js';
 import { prettyDate, prettyTime } from './time.js';
+import { PRICE } from './ai.js';
+
+// Members have already paid, so price never goes into the messages: drop it from the facts Claude sees
+export function withoutPrice(facts) {
+  const out = { ...facts, price_text: undefined };
+  for (const [k, v] of Object.entries(out)) {
+    if (Array.isArray(v)) out[k] = v.filter((x) => !(typeof x === 'string' && (PRICE.test(x) || /\b99\b/.test(x))));
+    else if (typeof v === 'string' && k !== 'title' && PRICE.test(v)) out[k] = undefined;
+  }
+  return out;
+}
 
 export const programmeOf = (ws) => db().programmes.find((p) => p.id === ws.programmeId);
 
@@ -14,7 +25,7 @@ export function resolve(ws, old = null) {
   const prog = programmeOf(ws);
   if (!prog?.factSheet) return null;
   const factSheet = {
-    ...prog.factSheet,
+    ...withoutPrice(prog.factSheet),
     date_text: prettyDate(ws.date),
     time_text: timeLabelOf(ws),
   };
