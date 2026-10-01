@@ -60,7 +60,7 @@ app.get('/api/state', (req, res) => {
     accounts: d.accounts.map((a) => ({ ...a, ...accountStatus(a.id) })),
     workshops: d.workshops.map((w) => ({ ...w, displayName: displayName(w), timeLabelShown: timeLabelOf(w), today: phaseFor(w, date) })),
     sends: d.sends.slice(0, 60),
-    log: (d.log || []).slice(0, 80),
+    log: (d.log || []).slice(0, 200),
   });
 });
 
@@ -88,7 +88,7 @@ app.post('/api/accounts/:id/resync', wrap(async (req, res) => {
   save();
   const message = `${acc.name} resynced: ${groups.length} groups${renamed ? `, ${renamed} renamed` : ''}`
     + (missing.length ? `. No longer in: ${missing.map((m) => `${m.group} (${m.workshop})`).join(', ')}` : '');
-  log(missing.length ? 'warn' : 'info', message);
+  log(missing.length ? 'warn' : 'info', message, { kind: 'system' });
   res.json({ status, groups: groups.length, renamed, missing, message });
 }));
 app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await listGroups(findAcc(req.params.id).id))));
@@ -115,7 +115,7 @@ app.post('/api/programmes/:id/facts', wrap(async (req, res) => {
   p.factSheet = await extractFacts(pageText, p.focus);
   p.factsAt = new Date().toISOString();
   save();
-  log('info', `${p.name}: fact sheet built from landing page`);
+  log('info', `${p.name}: fact sheet built from landing page`, { kind: 'change' });
   res.json(p.factSheet);
 }));
 
@@ -135,12 +135,29 @@ app.post('/api/workshops', wrap((req, res) => {
     firstSendDate: nowParts().date,
   }, req.body);
   db().workshops.push(ws); save();
-  log('info', `${displayName(ws)}: created${ws.groups.length ? `, ${ws.groups.length} groups, auto-send on` : ''}`);
+  log('info', `${displayName(ws)}: created${ws.groups.length ? `, ${ws.groups.length} groups, auto-send on` : ''}`, { kind: 'change', workshopId: ws.id });
   res.json(ws);
 }));
-app.put('/api/workshops/:id', wrap((req, res) => { const ws = applyFields(findWs(req.params.id), req.body); save(); res.json(ws); }));
+const LABELS = { date: 'workshop date', startTime: 'start time', sendTime: 'daily message time', dayOf: 'workshop-day message', dayOfTime: 'workshop-day message time',
+  active: 'sending', firstSendDate: 'start sending from', formLink: 'bonus form link', zoomLink: 'Zoom link', account: 'sending number', programmeId: 'programme', name: 'name', timeLabel: 'time wording' };
+const shown = (k, v) => k === 'active' ? (v === false ? 'paused' : 'on') : k === 'dayOf' ? (v === false ? 'off' : 'on') : (v || '(blank)');
+app.put('/api/workshops/:id', wrap((req, res) => {
+  const ws = findWs(req.params.id);
+  const before = structuredClone(ws);
+  applyFields(ws, req.body);
+  save();
+  const changes = Object.keys(LABELS).filter((k) => k in req.body && JSON.stringify(before[k] ?? '') !== JSON.stringify(ws[k] ?? ''))
+    .map((k) => ['formLink', 'zoomLink', 'account', 'programmeId', 'name', 'timeLabel'].includes(k) ? `${LABELS[k]} changed` : `${LABELS[k]} ${shown(k, before[k])} → ${shown(k, ws[k])}`);
+  const g = (x) => (x.groups || []).map((y) => y.jid).sort().join();
+  if (g(before) !== g(ws)) changes.push(`groups: ${ws.groups.length} picked (${ws.groups.map((y) => y.name).join(', ') || 'none'})`);
+  if (changes.length) log('info', `${displayName(ws)}: ${changes.join('; ')}`, { kind: 'change', workshopId: ws.id });
+  res.json(ws);
+}));
 app.delete('/api/workshops/:id', wrap((req, res) => {
-  db().workshops = db().workshops.filter((w) => w.id !== req.params.id); save(); res.json({ ok: true });
+  const ws = findWs(req.params.id);
+  db().workshops = db().workshops.filter((w) => w.id !== req.params.id); save();
+  log('info', `${displayName(ws)}: deleted`, { kind: 'change', workshopId: ws.id });
+  res.json({ ok: true });
 }));
 
 // Reschedule: saved now, announced a few minutes later (so it can still be cancelled) or immediately with sendNow
@@ -153,14 +170,20 @@ app.post('/api/workshops/:id/reschedule', wrap((req, res) => {
   const sendAt = new Date(Date.now() + (sendNow ? 0 : RESCHEDULE_DELAY_MIN() * 60_000)).toISOString();
   ws.pendingReschedule = { date, startTime: startTime || '', timeLabel: timeLabel || '', sendNow: !!sendNow, enteredDate: nowParts().date, enteredAt: new Date().toISOString(), sendAt };
   save();
-  log('info', `${displayName(ws)}: reschedule to ${date} saved, ${sendNow ? 'announcing now' : `announcing in ${RESCHEDULE_DELAY_MIN()} min`}`);
+  log('info', `${displayName(ws)}: reschedule to ${date} saved, ${sendNow ? 'announcing now' : `announcing in ${RESCHEDULE_DELAY_MIN()} min`}`, { kind: 'change', workshopId: ws.id });
   res.json(ws.pendingReschedule);
 }));
 app.delete('/api/workshops/:id/reschedule', wrap((req, res) => {
   const ws = findWs(req.params.id); delete ws.pendingReschedule; save();
-  log('info', `${displayName(ws)}: pending reschedule cancelled`);
+  log('info', `${displayName(ws)}: pending reschedule cancelled`, { kind: 'change', workshopId: ws.id });
   res.json({ ok: true });
 }));
+
+// Full activity history (fetched when the Activity tab is open)
+app.get('/api/activity', (req, res) => {
+  const d = db();
+  res.json({ log: d.log || [], sends: d.sends });
+});
 
 // Preview a message for any phase (nothing is sent, nothing is saved)
 app.post('/api/workshops/:id/preview', wrap(async (req, res) => {
@@ -184,6 +207,8 @@ app.post('/api/workshops/:id/test', wrap(async (req, res) => {
   const ws = findWs(req.params.id);
   if (!req.body.jid || !req.body.text) throw new Error('Pick a group and write a preview first');
   await sendText(ws.account, req.body.jid, req.body.text);
+  const group = ws.groups?.find((g) => g.jid === req.body.jid)?.name || req.body.jid;
+  log('info', `${displayName(ws)}: preview sent by hand to ${group}`, { kind: 'sent', workshopId: ws.id, manualText: req.body.text });
   res.json({ ok: true });
 }));
 
@@ -197,6 +222,7 @@ app.listen(PORT, HOST, async () => {
   if (isPublic && !PASS) console.warn('Dashboard is reachable by others but DASHBOARD_PASSWORD is not set, so it is locked. Set it to unlock.');
   if (storageIsTemporary()) console.warn('No Railway volume attached: workshops and WhatsApp logins will be lost on every redeploy. Attach a volume to this service.');
   if (!process.env.ANTHROPIC_API_KEY) console.warn('ANTHROPIC_API_KEY is missing in .env, AI drafting will fail.');
-  for (const a of db().accounts) await startAccount(a.id).catch((e) => log('error', `Start ${a.name}: ${e.message}`));
+  log('info', 'Hype Dispatch started', { kind: 'system' });
+  for (const a of db().accounts) await startAccount(a.id).catch((e) => log('error', `Start ${a.name}: ${e.message}`, { kind: 'system' }));
   startScheduler();
 });

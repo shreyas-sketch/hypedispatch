@@ -99,6 +99,14 @@ dialog::backdrop{background:rgba(10,10,12,.5)}
 .lu .when{min-width:118px;font-weight:600}
 .lu .when .small{font-weight:400}
 .lu.blocked{opacity:.75}
+.day{font-weight:700;font-size:13px;margin:16px 0 4px;color:var(--muted)}
+.ev{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);align-items:flex-start}
+.ev .tm{min-width:62px;color:var(--muted);font-size:12px;padding-top:2px}
+.ev .ic{width:20px;text-align:center}
+.ev .body{flex:1;min-width:0}
+.ev.notsent .body>div:first-child{color:var(--bad)}
+.ev details summary{cursor:pointer;color:var(--muted);font-size:12px;margin-top:3px}
+.ev .groupres{display:grid;gap:2px;margin-top:6px;font-size:12px}
 .pending{background:var(--warn-soft);border-radius:12px;padding:12px 14px}
 main>*,.cols>*{min-width:0} /* let wide tables scroll inside their card instead of widening the page */
 .tabs .short{display:none}
@@ -133,7 +141,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     <a href="#week" data-go="week"><span class="long">This week</span><span class="short">Week</span></a>
     <a href="#programmes" data-go="programmes">Programmes <span class="pill" id="tabProg"></span></a>
     <a href="#numbers" data-go="numbers"><span class="long">WhatsApp numbers</span><span class="short">Numbers</span> <span class="pill" id="tabNum"></span></a>
-    <a href="#history" data-go="history"><span class="long">Sent &amp; activity</span><span class="short">History</span> <span class="pill" id="tabHist" hidden></span></a>
+    <a href="#history" data-go="history"><span class="long">Activity log</span><span class="short">Activity</span> <span class="pill" id="tabHist" hidden></span></a>
   </nav>
   <span class="grow"></span>
   <button id="storePill" class="pill bad" hidden onclick="toast('Railway wipes this server on every redeploy. Add a volume to the service (right-click it → Attach volume, any mount path) so workshops and WhatsApp logins are kept.')">Data not saved ⓘ</button>
@@ -188,16 +196,29 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
       </div>
   </section>
 
-  <div class="cols" data-tab="history">
-    <section class="card">
-      <h2>Sent messages</h2>
-      <div id="sends"></div>
-    </section>
-    <section class="card">
-      <h2>Activity</h2>
-      <div class="log" id="log"></div>
-    </section>
-  </div>
+  <section class="card" data-tab="history">
+    <div class="row" style="margin-bottom:12px">
+      <h2 style="margin:0">Activity log</h2>
+      <span class="muted small">Everything that was sent, everything that wasn't (and why), and every change.</span>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <select id="aWs" style="max-width:240px" onchange="renderActivity()"><option value="">All workshops</option></select>
+      <select id="aKind" style="max-width:220px" onchange="renderActivity()">
+        <option value="">Everything</option>
+        <option value="sent">✅ Sent</option>
+        <option value="notsent">⛔ Not sent &amp; problems</option>
+        <option value="change">✏️ Changes</option>
+        <option value="info">📝 Message written</option>
+        <option value="system">🔌 WhatsApp &amp; system</option>
+      </select>
+      <select id="aDays" style="max-width:160px" onchange="renderActivity()">
+        <option value="1">Today</option><option value="2">Today + yesterday</option><option value="7" selected>Last 7 days</option><option value="0">All</option>
+      </select>
+      <input id="aSearch" placeholder="Search, e.g. a group name" oninput="renderActivity()" style="flex:1;min-width:160px">
+    </div>
+    <div id="aSummary" class="row small" style="margin-bottom:6px"></div>
+    <div id="activity"></div>
+  </section>
 </main>
 
 <!-- Programme editor -->
@@ -368,6 +389,7 @@ function showView() {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'week';
   document.body.dataset.view = v;
   document.querySelectorAll('.tabs a').forEach((a) => { const on = a.dataset.go === v; a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); });
+  if (v === 'history' && S) loadActivity();
 }
 window.addEventListener('hashchange', showView);
 showView();
@@ -400,9 +422,9 @@ function renderTabs() {
   const connected = S.accounts.filter((a) => a.status === 'connected').length;
   $('tabNum').textContent = S.accounts.length ? `${connected}/${S.accounts.length} on` : 'none';
   $('tabNum').className = 'pill ' + (S.accounts.length && connected === S.accounts.length ? 'ok' : connected ? 'warn' : 'bad');
-  const failed = S.sends.filter((s) => Object.values(s.results || {}).some((r) => !r.ok)).length;
-  $('tabHist').hidden = !failed;
-  $('tabHist').textContent = `${failed} failed`;
+  const todayNotSent = S.log.filter((l) => l.kind === 'notsent' && new Date(l.at).toLocaleDateString('en-CA', { timeZone: S.tz }) === S.now.date).length;
+  $('tabHist').hidden = !todayNotSent;
+  $('tabHist').textContent = `${todayNotSent} today`;
   $('tabHist').className = 'pill bad';
   $('progSummary').textContent = `${ready} of ${S.programmes.length} fact sheets ready. Build each once from its landing page, reuse it every week.`;
 }
@@ -505,16 +527,50 @@ function renderAccounts() {
     </div>`).join('') : '<div class="empty">No numbers yet. Add one and scan the QR from your phone.</div>';
 }
 
-function renderLog() {
-  $('log').innerHTML = S.log.length ? S.log.map((l) => `<div><span class="pill ${l.level === 'error' ? 'bad' : l.level === 'warn' ? 'warn' : 'ok'}">${l.level}</span> <span class="muted small">${new Date(l.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span><br>${esc(l.msg)}</div>`).join('') : '<div class="empty">Nothing yet</div>';
+// ---------- activity log ----------
+let A = null; // { log, sends } from /api/activity
+const openEv = new Set(); // expanded entries stay open across refreshes
+const KIND_ICON = { sent: '✅', notsent: '⛔', change: '✏️', info: '📝', system: '🔌' };
+async function loadActivity() {
+  try { A = await api('/api/activity'); A.loadedAt = Date.now(); } catch (e) { $('activity').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const sel = $('aWs'), keep = sel.value;
+  const names = new Map();
+  for (const w of S.workshops) names.set(w.id, w.displayName);
+  for (const l of A.log) if (l.workshopId && !names.has(l.workshopId)) names.set(l.workshopId, l.msg.split(':')[0] + ' (deleted)');
+  sel.innerHTML = '<option value="">All workshops</option>' + [...names].map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('');
+  sel.value = keep;
+  renderActivity();
 }
-
-function renderSends() {
-  $('sends').innerHTML = S.sends.length ? S.sends.slice(0, 25).map((s) => {
-    const r = Object.values(s.results || {}); const ok = r.filter((x) => x.ok).length;
-    return `<div class="send"><div class="row"><b>${esc(s.workshop)}</b><span class="pill ${s.phase}">${PHASE_LABEL[s.phase]}</span><span class="small muted">${s.date}</span><span class="grow"></span>${s.source === 'fallback' ? '<span class="pill warn">safe template</span>' : ''}<span class="pill ${ok === r.length ? 'ok' : 'warn'}">${ok}/${r.length} groups</span></div>
-      <details><summary>Message</summary><div class="preview" style="margin-top:8px">${waFormat(s.text)}</div>${r.filter((x) => !x.ok).map((x) => `<div class="small" style="color:var(--bad)">✗ ${esc(x.name)}: ${esc(x.error)}</div>`).join('')}</details></div>`;
-  }).join('') : '<div class="empty">Messages will show here once they go out</div>';
+const istDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: S.tz });
+const istTime = (iso) => new Date(iso).toLocaleTimeString('en-IN', { timeZone: S.tz, hour: 'numeric', minute: '2-digit' }).toUpperCase();
+function renderActivity() {
+  if (!A) return;
+  const ws = $('aWs').value, kind = $('aKind').value, days = Number($('aDays').value), q = $('aSearch').value.trim().toLowerCase();
+  const from = days ? addDays(S.now.date, -(days - 1)) : '';
+  const sendByKey = new Map(A.sends.map((x) => [x.key, x]));
+  const rows = A.log.filter((l) => (!ws || l.workshopId === ws) && (!kind || l.kind === kind) && (!from || istDay(l.at) >= from)
+    && (!q || l.msg.toLowerCase().includes(q) || (l.key && (sendByKey.get(l.key)?.text || '').toLowerCase().includes(q))));
+  const count = (k) => rows.filter((l) => l.kind === k).length;
+  $('aSummary').innerHTML = rows.length ? `<span class="pill ok">✅ ${count('sent')} sent</span><span class="pill ${count('notsent') ? 'bad' : ''}">⛔ ${count('notsent')} not sent / problems</span><span class="pill">✏️ ${count('change')} changes</span>` : '';
+  if (!rows.length) { $('activity').innerHTML = '<div class="empty">Nothing here for these filters</div>'; return; }
+  let html = '', lastDay = '';
+  for (const l of rows.slice(0, 500)) {
+    const day = istDay(l.at);
+    if (day !== lastDay) { html += `<div class="day">${day === S.now.date ? 'Today' : day === addDays(S.now.date, -1) ? 'Yesterday' : niceDate(day)}</div>`; lastDay = day; }
+    const rec = l.key && sendByKey.get(l.key);
+    const results = rec ? Object.values(rec.results || {}) : [];
+    const id = l.at + (l.key || '');
+    const open = openEv.has(id) ? ' open' : '';
+    const track = `ontoggle="this.open ? openEv.add('${id}') : openEv.delete('${id}')"`;
+    const detail = rec ? `<details${open} ${track}><summary>Show message${results.length ? ` and ${results.length} group${results.length > 1 ? 's' : ''}` : ''}</summary>
+        <div class="preview" style="margin-top:6px">${waFormat(rec.text)}</div>
+        ${results.length ? `<div class="groupres">${results.map((r) => `<div>${r.ok ? '✅' : '❌'} ${esc(r.name)}${r.at ? ` · ${istTime(r.at)}` : ''}${r.error ? ` · <span style="color:var(--bad)">${esc(r.error)}</span>` : ''}</div>`).join('')}</div>` : ''}
+        <div class="small muted" style="margin-top:4px">${rec.source === 'ai' ? 'Written by Claude' : 'Safe template'}${rec.rounds > 1 ? ` · ${rec.rounds} tries` : ''}</div></details>`
+      : l.manualText ? `<details${open} ${track}><summary>Show message</summary><div class="preview" style="margin-top:6px">${waFormat(l.manualText)}</div></details>` : '';
+    html += `<div class="ev ${l.kind || ''}"><div class="tm">${istTime(l.at)}</div><div class="ic">${KIND_ICON[l.kind] || (l.level === 'error' ? '⛔' : '•')}</div><div class="body"><div>${esc(l.msg)}</div>${detail}</div></div>`;
+  }
+  if (rows.length > 500) html += `<div class="empty">Showing the latest 500 of ${rows.length}. Narrow the filters to see older ones.</div>`;
+  $('activity').innerHTML = html;
 }
 
 async function refresh() {
@@ -524,7 +580,8 @@ async function refresh() {
   $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
   $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key ⓘ';
   document.querySelectorAll('.rsDelay').forEach((el) => { el.textContent = S.rescheduleDelay; });
-  renderTabs(); renderSetup(); renderLineup(); renderWeek(); renderProgs(); renderAccounts(); renderLog(); renderSends();
+  renderTabs(); renderSetup(); renderLineup(); renderWeek(); renderProgs(); renderAccounts();
+  if (document.body.dataset.view === 'history' && Date.now() - (A?.loadedAt || 0) > 30_000) loadActivity();
 }
 
 async function resync(id, btn) {

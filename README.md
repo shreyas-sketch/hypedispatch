@@ -51,7 +51,7 @@ The dashboard has four tabs across the top. Each tab has its own link, so the br
 - **This week**: **Lined up next** lists every message that will go out automatically (no approval needed), with a Preview button and a clear warning if something would stop it sending. Below that, the week grid shows each workshop day by day. Until setup is finished, a **Getting started** checklist at the top links to each step.
 - **Programmes**: the landing pages and their fact sheets. The badge shows how many are ready (e.g. `3/10`).
 - **WhatsApp numbers**: connect a number by scanning its QR. The badge turns red if none is connected. **↻ Resync** reconnects with the same login (no QR) and reloads its groups and communities. Use it after joining a new community, or if a number seems stuck. It also updates renamed groups in your workshops and warns about groups the number has left. The workshop editor has the same button next to the group list.
-- **Sent & activity**: every message that went out, plus the activity log. A red badge appears if any group failed.
+- **Activity log**: one timeline of everything: what was sent (open it to see the exact message and which groups got it, with times), what was **not** sent and why (e.g. paused, waiting for a date change, no groups picked, no fact sheet, WhatsApp disconnected), and every change made to a workshop. Filter by workshop, type and date, or search. A red badge shows how many things didn't go out today.
 
 Warnings on a workshop are buttons: **Fact sheet missing** opens that programme, **No community picked** opens the workshop at the community step. Click a workshop's name (or tab to it and press Enter) to edit, reschedule or preview it.
 

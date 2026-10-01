@@ -40,12 +40,13 @@ export function save() {
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
 
-// Rolling activity log shown in the dashboard
+// Rolling activity log shown in the dashboard.
+// extra: { kind: 'sent' | 'notsent' | 'change' | 'system' | 'info', workshopId, key (send record) }
 export function log(level, msg, extra = {}) {
   const d = db();
   d.log = d.log || [];
-  d.log.unshift({ at: new Date().toISOString(), level, msg, ...extra });
-  d.log = d.log.slice(0, 500);
+  d.log.unshift({ at: new Date().toISOString(), level, msg, kind: level === 'error' ? 'notsent' : 'info', ...extra });
+  d.log = d.log.slice(0, 3000);
   save();
   console.log(`[${level}] ${msg}`);
 }

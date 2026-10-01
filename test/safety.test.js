@@ -23,11 +23,32 @@ assert.ok(fs.existsSync(canary), 'folder outside data/auth survives');
 // 2. A workshop that can't send logs the problem once, not every minute
 const d = db();
 const prog = d.programmes[0];
-d.workshops.push({ id: 'w1', programmeId: prog.id, date: '2026-10-10', sendTime: '11:00', active: true, groups: [{ jid: 'g@g.us', name: 'G' }], firstSendDate: '2026-09-30' });
+d.workshops.push({ id: 'w1', programmeId: prog.id, date: '2026-10-10', sendTime: '11:00', active: true, account: 'a1', groups: [{ jid: 'g@g.us', name: 'G' }], firstSendDate: '2026-09-30' });
 d.workshops.push({ id: 'w2', programmeId: prog.id, date: '2026-10-10', sendTime: '11:00', active: true, groups: [], firstSendDate: '2026-09-30' });
 for (let m = 0; m < 5; m++) { await tick(new Date(`2026-09-30T11:0${m}:00+05:30`)); await new Promise((r) => setTimeout(r, 30)); }
 assert.equal(d.log.filter((l) => l.msg.includes('no fact sheet')).length, 1, 'missing fact sheet logged once');
-assert.equal(d.log.filter((l) => l.msg.includes('no groups')).length, 1, 'no groups logged once');
+assert.equal(d.log.filter((l) => l.msg.includes('no WhatsApp groups are picked')).length, 1, 'no groups logged once');
+
+// 2b. Every reason for not sending is written to the activity log once, after the send time
+{
+  const fs_ = { title: 'T' };
+  const p2 = d.programmes[1]; p2.factSheet = fs_;
+  const base = { programmeId: p2.id, date: '2026-10-10', sendTime: '11:00', active: true, account: 'a1', groups: [{ jid: 'x@g.us', name: 'X' }], firstSendDate: '2026-09-30' };
+  d.workshops.push({ ...base, id: 'p1', name: 'Paused one', active: false });
+  d.workshops.push({ ...base, id: 'p2', name: 'Later start', firstSendDate: '2026-10-03' });
+  d.workshops.push({ ...base, id: 'p3', name: 'Pending move', pendingReschedule: { date: '2026-10-12', sendAt: new Date('2026-09-30T19:00:00+05:30').toISOString() } });
+  d.workshops.push({ ...base, id: 'p4', name: 'No number', account: '' });
+  await tick(new Date('2026-09-30T10:59:00+05:30'));
+  assert.ok(!d.log.some((l) => l.workshopId === 'p1'), 'nothing logged before the send time');
+  for (const t of ['11:00', '11:01', '11:02']) await tick(new Date(`2026-09-30T${t}:00+05:30`));
+  const why = (id) => d.log.filter((l) => l.workshopId === id && l.kind === 'notsent').map((l) => l.msg);
+  assert.deepEqual(why('p1'), ["Paused one: today's daily hype message (11 AM) was NOT sent: the workshop is paused (More settings → Sending)"]);
+  assert.ok(why('p2')[0].includes('start sending from 2026-10-03'));
+  assert.ok(why('p3')[0].includes('date change to 2026-10-12 is waiting to be announced (at 7 PM)'));
+  assert.ok(why('p4')[0].includes('no sending WhatsApp number'));
+  for (const id of ['p1', 'p2', 'p3', 'p4']) assert.equal(why(id).length, 1, `${id} logged once`);
+  d.workshops = d.workshops.filter((w) => !w.id.startsWith('p'));
+}
 
 // 3. Deleted seed programmes stay deleted after a restart
 d.programmes = d.programmes.filter((p) => p.name !== 'Deepak Crypto');

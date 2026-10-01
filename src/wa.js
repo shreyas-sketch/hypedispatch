@@ -54,7 +54,7 @@ export async function startAccount(id) {
       s.status = 'connected';
       s.qr = null;
       s.me = jidNormalizedUser(sock.user?.id);
-      log('info', `WhatsApp ${id} connected as ${s.me}`);
+      log('info', `WhatsApp ${id} connected as ${s.me}`, { kind: 'system' });
     }
     if (u.connection === 'close') {
       if (sessions.get(id) !== s) return; // number was removed or replaced, don't bring it back
@@ -62,13 +62,13 @@ export async function startAccount(id) {
       if (code === DisconnectReason.loggedOut) {
         s.status = 'offline';
         fs.rmSync(authDir(id), { recursive: true, force: true });
-        log('warn', `WhatsApp ${id} was logged out. Scan the QR again.`);
+        log('warn', `WhatsApp ${id} was logged out. Scan the QR again.`, { kind: 'system' });
       } else {
         s.status = 'reconnecting';
         setTimeout(() => {
           if (sessions.get(id) !== s) return;
           s.status = 'offline';
-          startAccount(id).catch((e) => log('error', `WhatsApp ${id} reconnect: ${e.message}`));
+          startAccount(id).catch((e) => log('error', `WhatsApp ${id} reconnect: ${e.message}`, { kind: 'system' }));
         }, 3000);
       }
     }

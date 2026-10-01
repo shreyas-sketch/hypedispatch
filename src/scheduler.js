@@ -30,11 +30,14 @@ export function startScheduler() {
   setTimeout(() => tick().catch(() => {}), 15_000); // catch up shortly after boot
 }
 
-function warnOnce(key, level, msg) {
+function warnOnce(key, level, msg, extra = {}) {
   if (warned.has(key)) return;
   warned.add(key);
-  log(level, msg);
+  log(level, msg, extra);
 }
+
+const PHASE_NAME = { hype: 'daily hype message', tomorrow: '"it\'s tomorrow" reminder', dayof: 'workshop-day message', reschedule: 'date-change announcement' };
+const clock = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}${m ? ':' + String(m).padStart(2, '0') : ''} ${ap}`; };
 
 function launch(key, fn, label) {
   if (running.has(key)) return;
@@ -46,33 +49,39 @@ export async function tick(now = new Date()) {
   const { date, hm } = nowParts(now);
   const d = db();
   for (const ws of d.workshops) {
-    if (ws.active === false) continue;
     const name = displayName(ws);
+    // Once today's send time has passed, any reason for NOT sending is written to the activity log (once a day)
+    const slot = phaseFor(ws, date).phase;
+    const slotDue = slot && hm >= sendTimeFor(ws, slot);
+    const why = (reason) => slotDue && warnOnce(`${ws.id}|${date}|why`, 'warn',
+      `${name}: today's ${PHASE_NAME[slot]} (${clock(sendTimeFor(ws, slot))}) was NOT sent: ${reason}`, { kind: 'notsent', workshopId: ws.id });
+    if (ws.active === false) { why('the workshop is paused (More settings → Sending)'); continue; }
 
     // 1. Pending reschedule: hold everything else for this workshop until it's announced
     const pr = ws.pendingReschedule;
     if (pr) {
       if (pr.sendNow || now.getTime() >= Date.parse(sendAtOf(pr))) {
         launch(`${ws.id}|${date}|reschedule`, () => runReschedule(ws, date, now), name);
-      }
+      } else why(`a date change to ${pr.date} is waiting to be announced (at ${clock(nowParts(new Date(sendAtOf(pr))).hm)}); regular messages pause until then`);
       continue;
     }
     // A reschedule went out today: finish delivering it, and skip regular messages today
     const rrec = d.sends.find((s) => s.workshopId === ws.id && s.phase === 'reschedule' && s.date === date);
     if (rrec) {
       if (!rrec.done && !notYet(rrec, now)) launch(rrec.key, () => deliver(ws, rrec, now), name);
+      why("the date-change announcement went out today instead");
       continue;
     }
 
     // 2. Regular daily message
-    if (ws.firstSendDate && date < ws.firstSendDate) continue;
-    const { phase } = phaseFor(ws, date);
-    if (!phase) continue;
-    if (hm < sendTimeFor(ws, phase)) continue;
-    if (phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // already started
-    if (!ws.groups?.length) { warnOnce(`${ws.id}|${date}|nogroups`, 'warn', `${name}: no groups selected, today's ${phase} message was not sent`); continue; }
+    if (ws.firstSendDate && date < ws.firstSendDate) { why(`it's set to start sending from ${ws.firstSendDate} (More settings → Start sending from)`); continue; }
+    const phase = slot;
+    if (!phase || !slotDue) continue;
     const key = `${ws.id}|${date}|${phase}`;
     const rec = d.sends.find((s) => s.key === key);
+    if (phase === 'dayof' && ws.startTime && hm >= ws.startTime && !rec) { why(`the workshop had already started (${clock(ws.startTime)}) when Hype Dispatch got to it`); continue; }
+    if (!ws.groups?.length) { why('no WhatsApp groups are picked for it'); continue; }
+    if (!ws.account) { why('no sending WhatsApp number is picked for it'); continue; }
     if (rec?.done || notYet(rec, now)) continue;
     launch(key, () => runSend(ws, phase, date, key, now), name);
   }
@@ -124,7 +133,7 @@ export async function runSend(ws, phase, date, key, now = new Date()) {
   const d = db();
   const name = displayName(ws);
   const r = resolve(ws);
-  if (!r) { warnOnce(`${key}|nofacts`, 'error', `${name}: its programme has no fact sheet yet, skipped the ${phase} message`); return; }
+  if (!r) { warnOnce(`${ws.id}|${date}|why`, 'error', `${name}: today's ${PHASE_NAME[phase]} was NOT sent: its programme has no fact sheet yet (Programmes → Build)`, { kind: 'notsent', workshopId: ws.id }); return; }
   if (!ws.groups?.length) return;
 
   let rec = d.sends.find((s) => s.key === key);
@@ -134,6 +143,7 @@ export async function runSend(ws, phase, date, key, now = new Date()) {
     rec = newRecord(ws, key, date, phase, withLinks(out.text, r, phase), out);
     d.history[ws.id] = [...previous, out.text].slice(-12);
     save();
+    logWritten(rec, out);
   }
   await deliver(ws, rec, now);
 }
@@ -152,7 +162,7 @@ export async function runReschedule(ws, date, now = new Date()) {
     timeLabel: pr.timeLabel || (pr.startTime ? '' : ws.timeLabel), // blank = derived from startTime
   };
   const r = resolve(next, old);
-  if (!r) { warnOnce(`${ws.id}|${date}|reschedule|nofacts`, 'error', `${name}: its programme has no fact sheet yet, can't announce the reschedule`); return; }
+  if (!r) { warnOnce(`${ws.id}|${date}|reschedule|nofacts`, 'error', `${name}: the date change could NOT be announced: its programme has no fact sheet yet`, { kind: 'notsent', workshopId: ws.id }); return; }
 
   const out = await composeMessage(r, 'reschedule', d.history[ws.id] || []);
 
@@ -165,7 +175,8 @@ export async function runReschedule(ws, date, now = new Date()) {
   rec.fromDate = old.date;
   d.history[ws.id] = [...(d.history[ws.id] || []), out.text].slice(-12);
   save();
-  log('info', `${name}: moved from ${old.date} to ${next.date}, announcing to ${ws.groups?.length || 0} groups`);
+  log('info', `${name}: moved from ${old.date} to ${next.date}, announcing to ${ws.groups?.length || 0} groups`, { kind: 'change', workshopId: ws.id });
+  logWritten(rec, out);
   if (ws.groups?.length) await deliver(ws, rec, now);
   else { rec.done = true; save(); }
 }
@@ -180,8 +191,12 @@ function newRecord(ws, key, date, phase, text, out) {
   d.sends = d.sends.filter((s) => s.key !== key);
   d.sends.unshift(rec);
   d.sends = d.sends.slice(0, 400);
-  if (out.source === 'fallback') log('warn', `${rec.workshop}: used safe template (${out.error})`);
   return rec;
+}
+
+function logWritten(rec, out) {
+  const how = out.source === 'ai' ? `written by Claude${out.attempts > 1 ? ` (attempt ${out.attempts})` : ''}` : `written from the safe template, because ${out.error}`;
+  log(out.source === 'ai' ? 'info' : 'warn', `${rec.workshop}: ${PHASE_NAME[rec.phase]} ${how}`, { kind: 'info', workshopId: rec.workshopId, key: rec.key });
 }
 
 // Send to each group; skips groups already done, so it resumes after crashes
@@ -191,7 +206,7 @@ export async function deliver(ws, rec, now = new Date()) {
     rec.waiting = 'WhatsApp number not connected';
     rec.nextTryAt = new Date(now.getTime() + 60_000).toISOString();
     save();
-    warnOnce(`${rec.key}|offline`, 'warn', `${rec.workshop}: ${rec.phase} message is waiting, the sending WhatsApp number isn't connected. It goes out as soon as it reconnects.`);
+    warnOnce(`${rec.key}|offline`, 'warn', `${rec.workshop}: ${PHASE_NAME[rec.phase]} is waiting: the sending WhatsApp number isn't connected. It goes out as soon as it reconnects.`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
     return;
   }
   delete rec.waiting;
@@ -213,7 +228,9 @@ export async function deliver(ws, rec, now = new Date()) {
   save();
   const total = ws.groups?.length || 0;
   const failedNames = failed.map((f) => f.name).join(', ');
-  if (!failed.length) log('info', `${rec.workshop}: ${rec.phase} message sent to ${total}/${total} groups`);
-  else if (rec.done) log('error', `${rec.workshop}: gave up on ${failedNames} after ${rec.rounds} tries (${failed[0].error}). Send to them manually.`);
-  else log('warn', `${rec.workshop}: ${rec.phase} message sent to ${total - failed.length}/${total} groups. Retrying ${failedNames} in ${RETRY_EVERY_MIN} min (${failed[0].error})`);
+  const tag = { workshopId: rec.workshopId, key: rec.key };
+  const okNames = Object.values(rec.results).filter((r) => r.ok).map((r) => r.name).join(', ');
+  if (!failed.length) log('info', `${rec.workshop}: ${PHASE_NAME[rec.phase]} sent to ${total}/${total} groups (${okNames})`, { ...tag, kind: 'sent' });
+  else if (rec.done) log('error', `${rec.workshop}: gave up on ${failedNames} after ${rec.rounds} tries (${failed[0].error}). Send to them manually.`, { ...tag, kind: 'notsent' });
+  else log('warn', `${rec.workshop}: ${PHASE_NAME[rec.phase]} sent to ${total - failed.length}/${total} groups. Retrying ${failedNames} in ${RETRY_EVERY_MIN} min (${failed[0].error})`, { ...tag, kind: 'notsent' });
 }
