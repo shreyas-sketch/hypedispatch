@@ -99,8 +99,9 @@ To change the wait, set `RESCHEDULE_DELAY_MIN=5` in `.env` (or Railway Variables
 
 - One message per workshop per day. The same text goes to every group picked for it, 4–7 seconds apart.
 - If the PC was off at send time, the message goes out as soon as it's back on the same day. A day-of message is skipped if the workshop has already started.
-- Failed groups are retried automatically, up to 3 rounds.
+- If the WhatsApp number is disconnected at send time (e.g. during a Railway redeploy), the message waits and goes out as soon as it reconnects. **Lined up next** shows "WhatsApp number not connected" while it waits.
+- Groups that fail are retried every 5 minutes for about an hour. If one still fails after that, the Activity log says so in red, so you know to send it manually.
 - All data lives in the `data` folder, including WhatsApp logins. Don't share it.
 - The dashboard only opens on this PC by default. To use it from your phone or another computer on the same network, set `HOST=0.0.0.0` **and** `DASHBOARD_PASSWORD` in `.env`.
-- Tests: `npm test` (logic, a full-week scheduler run, and safety checks). The scheduler test runs a full week with a reschedule, using a fake Claude and no real WhatsApp.
+- Tests: `npm test` (logic, a full-week scheduler run, safety checks, and delivery retries). The scheduler test runs a full week with a reschedule, using a fake Claude and no real WhatsApp.
 - Unofficial WhatsApp automation can get a number restricted, so use numbers you're prepared for that on.

@@ -7,7 +7,8 @@ const FACT_MODEL = process.env.FACT_MODEL || 'claude-sonnet-5-5';
 const MSG_MODEL = process.env.MSG_MODEL || 'claude-haiku-4-5-20251001';
 
 let client;
-const ai = () => (client ||= new Anthropic()); // reads ANTHROPIC_API_KEY
+// reads ANTHROPIC_API_KEY. Short timeout so a slow API can't hold up a scheduled send for long (falls back to the template)
+const ai = () => (client ||= new Anthropic({ timeout: 60_000, maxRetries: 2 }));
 
 const textOf = (res) => {
   if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');

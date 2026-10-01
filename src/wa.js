@@ -124,11 +124,29 @@ export async function listGroups(id) {
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Test mode (HYPE_DRY_RUN): nothing leaves the PC. Tests can mark numbers offline or groups as failing.
 export const dryRunSent = [];
+export const dryRunOffline = new Set();
+export const dryRunFailing = new Set();
+
+export function isConnected(id) {
+  if (process.env.HYPE_DRY_RUN) return !dryRunOffline.has(id);
+  return sessions.get(id)?.status === 'connected';
+}
+
+const SEND_TIMEOUT_MS = 60_000;
+const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} timed out after ${ms / 1000}s`)), ms))]);
+
 export async function sendText(id, jid, text) {
-  if (process.env.HYPE_DRY_RUN) { dryRunSent.push({ id, jid, text }); return; } // test mode: nothing leaves the PC
+  if (process.env.HYPE_DRY_RUN) {
+    if (dryRunOffline.has(id)) throw new Error(`WhatsApp account "${id}" is not connected`);
+    if (dryRunFailing.has(jid)) throw new Error('send failed (test)');
+    dryRunSent.push({ id, jid, text });
+    return;
+  }
   const s = live(id);
-  const sent = await s.sock.sendMessage(jid, { text });
+  // A half-dropped connection can make a send hang forever; give up and retry later instead
+  const sent = await withTimeout(s.sock.sendMessage(jid, { text }), SEND_TIMEOUT_MS, 'Sending');
   rememberSent(id, sent); // needed to answer "please resend" requests from recipients' phones
 }
 

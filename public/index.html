@@ -426,8 +426,9 @@ function renderLineup() {
       <div class="when">${dayLabel(m.date)}<div class="small muted">${m.due && !m.blocked ? 'sending now' : fmt12(m.time)}</div></div>
       <span class="pill ${m.phase}">${PHASE_LABEL[m.phase]}</span>
       <div class="grow"><div style="font-weight:600">${esc(m.workshop)}</div>
-        <div class="small muted">${PHASE_TEXT[m.phase]}${m.newDate ? ' → ' + niceDate(m.newDate) : ''} · ${LINK_TEXT(m.links)} · ${m.groups} group${m.groups === 1 ? '' : 's'}</div></div>
-      ${m.blocked ? `<button class="pill bad" onclick="openEditor('${m.workshopId}'${m.blocked === 'No groups picked' || m.blocked === 'No sending number picked' ? ",'groups'" : ''})" title="Open to fix">Won't send: ${esc(m.blocked)} →</button>` : ''}
+        <div class="small muted">${PHASE_TEXT[m.phase]}${m.newDate ? ' → ' + niceDate(m.newDate) : ''} · ${LINK_TEXT(m.links)} · ${m.groups} group${m.groups === 1 ? '' : 's'}</div>
+        ${m.retry ? `<div class="small" style="color:var(--warn)">⏳ ${esc(m.retry)}</div>` : ''}</div>
+      ${m.blocked ? `<button class="pill bad" onclick="${m.blocked.includes('not connected') ? "go('numbers')" : `openEditor('${m.workshopId}'${m.blocked === 'No groups picked' || m.blocked === 'No sending number picked' ? ",'groups'" : ''})`}" title="Open to fix">Won't send: ${esc(m.blocked)} →</button>` : ''}
       <button class="small" onclick="quickPreview('${m.workshopId}','${m.phase}')">Preview</button>
     </div>`).join('') + (items.length > 6 ? `<div style="margin-top:8px"><button class="ghost small" onclick="showAllLineup=!showAllLineup;renderLineup()">${showAllLineup ? 'Show less' : `Show all ${items.length}`}</button></div>` : '');
 }

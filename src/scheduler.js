@@ -4,7 +4,7 @@
 import { db, save, log } from './db.js';
 import { nowParts, phaseFor, sendTimeFor, addDays } from './time.js';
 import { composeMessage, withLinks, linksFor } from './ai.js';
-import { sendText, sleep } from './wa.js';
+import { sendText, sleep, isConnected } from './wa.js';
 import { resolve, timeLabelOf, displayName, programmeOf } from './workshop.js';
 
 const running = new Set();
@@ -15,7 +15,17 @@ const GAP_MAX = Number(process.env.GROUP_GAP_MAX_MS || 7000);
 export const RESCHEDULE_DELAY_MIN = () => Number(process.env.RESCHEDULE_DELAY_MIN || 5);
 export const sendAtOf = (pr) => pr.sendAt || new Date(Date.parse(pr.enteredAt || 0) + RESCHEDULE_DELAY_MIN() * 60_000).toISOString();
 
+// Retry policy: failed groups are retried every RETRY_EVERY_MIN minutes, up to MAX_ROUNDS attempts.
+// While the sending number is disconnected (e.g. during a redeploy) we just wait; that doesn't use up attempts.
+const RETRY_EVERY_MIN = 5;
+const MAX_ROUNDS = 12; // about an hour of retries
+const notYet = (rec, now) => rec?.nextTryAt && now.getTime() < Date.parse(rec.nextTryAt);
+
 export function startScheduler() {
+  // Sends left unfinished by an older version: stop them rather than risk a duplicate of a manual resend
+  let changed = false;
+  for (const s of db().sends) if (!s.done && !s.retryVersion) { s.done = true; s.note = 'stopped when Hype Dispatch was updated'; changed = true; }
+  if (changed) save();
   setInterval(() => tick().catch((e) => log('error', `Scheduler: ${e.message}`)), 60_000);
   setTimeout(() => tick().catch(() => {}), 15_000); // catch up shortly after boot
 }
@@ -43,14 +53,14 @@ export async function tick(now = new Date()) {
     const pr = ws.pendingReschedule;
     if (pr) {
       if (pr.sendNow || now.getTime() >= Date.parse(sendAtOf(pr))) {
-        launch(`${ws.id}|${date}|reschedule`, () => runReschedule(ws, date), name);
+        launch(`${ws.id}|${date}|reschedule`, () => runReschedule(ws, date, now), name);
       }
       continue;
     }
     // A reschedule went out today: finish delivering it, and skip regular messages today
     const rrec = d.sends.find((s) => s.workshopId === ws.id && s.phase === 'reschedule' && s.date === date);
     if (rrec) {
-      if (!rrec.done) launch(rrec.key, () => deliver(ws, rrec), name);
+      if (!rrec.done && !notYet(rrec, now)) launch(rrec.key, () => deliver(ws, rrec, now), name);
       continue;
     }
 
@@ -62,8 +72,9 @@ export async function tick(now = new Date()) {
     if (phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // already started
     if (!ws.groups?.length) { warnOnce(`${ws.id}|${date}|nogroups`, 'warn', `${name}: no groups selected, today's ${phase} message was not sent`); continue; }
     const key = `${ws.id}|${date}|${phase}`;
-    if (d.sends.find((s) => s.key === key)?.done) continue;
-    launch(key, () => runSend(ws, phase, date, key), name);
+    const rec = d.sends.find((s) => s.key === key);
+    if (rec?.done || notYet(rec, now)) continue;
+    launch(key, () => runSend(ws, phase, date, key, now), name);
   }
 }
 
@@ -77,7 +88,8 @@ export function lineup(now = new Date(), days = 7) {
     const blocked = orig.active === false ? 'Paused'
       : !programmeOf(orig)?.factSheet ? 'Fact sheet missing'
       : !orig.groups?.length ? 'No groups picked'
-      : !orig.account ? 'No sending number picked' : '';
+      : !orig.account ? 'No sending number picked'
+      : !isConnected(orig.account) ? 'WhatsApp number not connected' : '';
     let ws = orig;
     let skipToday = d.sends.some((s) => s.workshopId === orig.id && s.phase === 'reschedule' && s.date === today);
     const pr = orig.pendingReschedule;
@@ -95,16 +107,20 @@ export function lineup(now = new Date(), days = 7) {
       const { phase } = phaseFor(ws, day);
       if (!phase) continue;
       const time = sendTimeFor(ws, phase);
-      if (d.sends.find((s) => s.key === `${ws.id}|${day}|${phase}`)?.done) continue; // already sent
+      const rec = d.sends.find((s) => s.key === `${ws.id}|${day}|${phase}`);
+      if (rec?.done) continue; // already sent
       if (i === 0 && phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // workshop already started
-      out.push({ ...base, phase, date: day, time, links: linksFor(ws, phase).map((l) => l.kind), blocked, due: i === 0 && hm >= time });
+      const failedNow = rec ? Object.values(rec.results || {}).filter((r) => !r.ok) : [];
+      const retry = rec?.waiting ? `${rec.waiting}, will send as soon as it reconnects`
+        : failedNow.length ? `${failedNow.length} group${failedNow.length > 1 ? 's' : ''} failed (${failedNow[0].error}), retrying${rec.nextTryAt ? ` at ${nowParts(new Date(rec.nextTryAt)).hm}` : ''}` : '';
+      out.push({ ...base, phase, date: day, time, links: linksFor(ws, phase).map((l) => l.kind), blocked, retry, due: i === 0 && hm >= time });
     }
   }
   return out.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 }
 
 // Draft once per day+phase, then deliver
-export async function runSend(ws, phase, date, key) {
+export async function runSend(ws, phase, date, key, now = new Date()) {
   const d = db();
   const name = displayName(ws);
   const r = resolve(ws);
@@ -119,11 +135,11 @@ export async function runSend(ws, phase, date, key) {
     d.history[ws.id] = [...previous, out.text].slice(-12);
     save();
   }
-  await deliver(ws, rec);
+  await deliver(ws, rec, now);
 }
 
 // Announce a reschedule, then move the workshop to its new date
-export async function runReschedule(ws, date) {
+export async function runReschedule(ws, date, now = new Date()) {
   const d = db();
   const pr = ws.pendingReschedule;
   if (!pr) return;
@@ -150,7 +166,7 @@ export async function runReschedule(ws, date) {
   d.history[ws.id] = [...(d.history[ws.id] || []), out.text].slice(-12);
   save();
   log('info', `${name}: moved from ${old.date} to ${next.date}, announcing to ${ws.groups?.length || 0} groups`);
-  if (ws.groups?.length) await deliver(ws, rec);
+  if (ws.groups?.length) await deliver(ws, rec, now);
   else { rec.done = true; save(); }
 }
 
@@ -159,7 +175,7 @@ function newRecord(ws, key, date, phase, text, out) {
   const rec = {
     key, workshopId: ws.id, workshop: displayName(ws), date, phase,
     text, source: out.source, note: out.error || null,
-    results: {}, done: false, createdAt: new Date().toISOString(),
+    results: {}, done: false, createdAt: new Date().toISOString(), retryVersion: 2,
   };
   d.sends = d.sends.filter((s) => s.key !== key);
   d.sends.unshift(rec);
@@ -169,7 +185,16 @@ function newRecord(ws, key, date, phase, text, out) {
 }
 
 // Send to each group; skips groups already done, so it resumes after crashes
-export async function deliver(ws, rec) {
+export async function deliver(ws, rec, now = new Date()) {
+  if (!isConnected(ws.account)) {
+    // Don't burn attempts while WhatsApp is (re)connecting: check again next minute
+    rec.waiting = 'WhatsApp number not connected';
+    rec.nextTryAt = new Date(now.getTime() + 60_000).toISOString();
+    save();
+    warnOnce(`${rec.key}|offline`, 'warn', `${rec.workshop}: ${rec.phase} message is waiting, the sending WhatsApp number isn't connected. It goes out as soon as it reconnects.`);
+    return;
+  }
+  delete rec.waiting;
   for (const g of ws.groups || []) {
     if (rec.results[g.jid]?.ok) continue;
     try {
@@ -183,10 +208,12 @@ export async function deliver(ws, rec) {
   }
   const failed = Object.values(rec.results).filter((r) => !r.ok);
   rec.rounds = (rec.rounds || 0) + 1;
-  rec.done = failed.length === 0 || rec.rounds >= 3; // failed groups retried next minute, max 3 rounds
+  rec.done = failed.length === 0 || rec.rounds >= MAX_ROUNDS;
+  rec.nextTryAt = rec.done ? null : new Date(now.getTime() + RETRY_EVERY_MIN * 60_000).toISOString();
   save();
   const total = ws.groups?.length || 0;
-  log(failed.length ? 'warn' : 'info',
-    `${rec.workshop}: ${rec.phase} message sent to ${total - failed.length}/${total} groups`
-    + (failed.length ? ` (failed: ${failed.map((f) => f.name).join(', ')})` : ''));
+  const failedNames = failed.map((f) => f.name).join(', ');
+  if (!failed.length) log('info', `${rec.workshop}: ${rec.phase} message sent to ${total}/${total} groups`);
+  else if (rec.done) log('error', `${rec.workshop}: gave up on ${failedNames} after ${rec.rounds} tries (${failed[0].error}). Send to them manually.`);
+  else log('warn', `${rec.workshop}: ${rec.phase} message sent to ${total - failed.length}/${total} groups. Retrying ${failedNames} in ${RETRY_EVERY_MIN} min (${failed[0].error})`);
 }
