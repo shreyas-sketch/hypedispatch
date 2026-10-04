@@ -24,6 +24,7 @@ export function db() {
     if (!cache.programmes.some((x) => x.name === p.name)) cache.programmes.push({ id: newId(), ...p, factSheet: null });
     cache.seeded.push(p.name);
   }
+  for (const p of cache.programmes) delete p.pageText; // older versions stored the whole landing page here
   // Repair workshops a bad request may have damaged in older versions (wrong types would break pages and sends)
   for (const w of cache.workshops) {
     if (!Array.isArray(w.groups)) w.groups = [];

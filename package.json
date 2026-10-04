@@ -4,7 +4,7 @@
   "description": "Auto hype reminders for workshop WhatsApp communities",
   "main": "src/index.js",
   "scripts": {
-    "test": "node test/logic.test.js && node test/scheduler.test.js && node test/safety.test.js && node test/delivery.test.js && node test/api.test.js",
+    "test": "node test/logic.test.js && node test/scheduler.test.js && node test/safety.test.js && node test/delivery.test.js && node test/api.test.js && node --no-warnings --experimental-test-module-mocks test/wa.test.js",
     "start": "node src/index.js"
   },
   "keywords": [],

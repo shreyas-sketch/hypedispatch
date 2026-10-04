@@ -302,7 +302,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
 <!-- Workshop editor -->
 <dialog id="editor">
   <div class="dhead"><h3 id="edTitle">New workshop</h3><span class="grow"></span>
-    <button class="ghost" onclick="editor.close()">Close</button>
+    <button class="ghost" onclick="closeEditor()">Close</button>
     <button class="primary" onclick="saveWorkshop()">Save</button>
     <button class="ghost danger" id="delBtn" onclick="delWorkshop()">Delete</button>
   </div>
@@ -669,16 +669,18 @@ function renderProgs() {
 }
 
 function renderAccounts() {
-  const cls = { connected: 'ok', 'scan-qr': 'warn', connecting: 'warn', reconnecting: 'warn', offline: 'bad' };
+  const cls = { connected: 'ok', 'scan-qr': 'warn', connecting: 'warn', reconnecting: 'warn', offline: 'bad', 'qr-expired': 'warn' };
+  const label = { connected: 'Connected', 'scan-qr': 'Waiting for you to scan the QR', connecting: 'Connecting…', reconnecting: 'Reconnecting…', offline: 'Offline', 'qr-expired': 'QR expired' };
   $('accounts').innerHTML = S.accounts.length ? S.accounts.map((a) => `
     <div class="acc">
       ${a.qr ? `<img src="${a.qr}" alt="QR">` : ''}
       <div class="grow">
         <div style="font-weight:600">${esc(a.name)}</div>
         <div class="small muted">${a.me ? esc(a.me.split('@')[0]) : a.qr ? 'WhatsApp → Linked devices → Link a device, then scan' : ''}</div>
-        <div style="margin-top:6px"><span class="pill ${cls[a.status] || ''}">${a.status}</span></div>
+        <div style="margin-top:6px"><span class="pill ${cls[a.status] || ''}">${label[a.status] || a.status}</span></div>
       </div>
-      ${a.status === 'scan-qr' ? '' : `<button class="small" onclick="resync('${a.id}', this)" title="Reconnect with the same login and reload groups and communities from WhatsApp">↻ Resync</button>`}
+      ${a.status === 'qr-expired' ? `<button class="small primary" onclick="api('/api/accounts/${a.id}/connect',{method:'POST'}).then(refresh)">Show QR</button>`
+        : a.status === 'scan-qr' ? '' : `<button class="small" onclick="resync('${a.id}', this)" title="Reconnect with the same login and reload groups and communities from WhatsApp">↻ Resync</button>`}
       <button class="ghost small" onclick="removeAccount('${a.id}')">Remove</button>
     </div>`).join('') : '<div class="empty">No numbers yet. Add one and scan the QR from your phone.</div>';
 }
@@ -828,6 +830,7 @@ function openEditor(id, focus, prefill) {
   loadGroups();
   renderPlan();
   editor.showModal();
+  editorSnapshot = prefill ? '' : editorState(); // a copy counts as unsaved until it's saved
   if (focus === 'groups') { $('secGroups').scrollIntoView({ block: 'start' }); $('f_account').focus(); }
   if (focus === 'reschedule') { $('rsSection').scrollIntoView({ block: 'start' }); (cur?.pendingReschedule ? $('rsPending').querySelector('button') : $('r_date'))?.focus(); }
 }
@@ -929,6 +932,7 @@ async function saveWorkshop(silent) {
     await refresh();
     cur = S.workshops.find((w) => w.id === cur.id);
     renderReschedule();
+    editorSnapshot = editorState();
     if (silent !== true) { toast(body.groups.length && body.active ? 'Saved. Auto-send is on.' : 'Saved'); editor.close(); }
   });
 }
@@ -1022,6 +1026,14 @@ async function preview(phase) {
 async function sendTest() { await busy(null, async () => { await api(`/api/workshops/${cur.id}/test`, { method: 'POST', body: { jid: $('testJid').value, text: pvText } }); toast('Sent to that group'); }); }
 
 const editor = $('editor'), progDlg = $('progDlg'), qpDlg = $('qpDlg');
+// Don't lose edits: Close / Escape ask first if something changed since the form was opened or saved
+let editorSnapshot = '';
+const editorState = () => JSON.stringify({ ...collect(), groups: [...picked.keys()].sort() });
+function closeEditor() {
+  if (editorState() !== editorSnapshot && !confirm('You have unsaved changes. Close without saving?')) return;
+  editor.close();
+}
+editor.addEventListener('cancel', (e) => { e.preventDefault(); closeEditor(); });
 editor.addEventListener('input', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
 editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); if (e.target.id === 'f_date' && allGroups.length) renderGroups(); });
 refresh(); setInterval(() => { if (!editor.open && !progDlg.open && !qpDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);

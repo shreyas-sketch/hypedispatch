@@ -42,7 +42,7 @@ export function accountStatus(id) {
 
 export async function startAccount(id) {
   const prev = sessions.get(id);
-  if (prev?.sock && prev.status !== 'offline') return;
+  if (prev?.sock && !['offline', 'qr-expired'].includes(prev.status)) return;
 
   const { state, saveCreds } = await useMultiFileAuthState(authDir(id));
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }));
@@ -83,6 +83,14 @@ export async function startAccount(id) {
     if (u.connection === 'close') {
       if (sessions.get(id) !== s) return; // number was removed or replaced, don't bring it back
       const code = u.lastDisconnect?.error?.output?.statusCode;
+      if (code === DisconnectReason.timedOut && s.status === 'scan-qr' && !state.creds?.me) {
+        // The QR was shown but nobody scanned it. Stop here instead of reconnecting (and asking WhatsApp
+        // for new QR codes) forever; "Show QR" in the dashboard starts again.
+        s.status = 'qr-expired';
+        s.qr = null;
+        log('info', `WhatsApp ${id}: the QR code expired without being scanned. Press "Show QR" to try again.`, { kind: 'system' });
+        return;
+      }
       if (code === DisconnectReason.connectionReplaced) {
         s.status = 'offline';
         log('error', `WhatsApp ${id} was taken over by another session using the same login (is Hype Dispatch also running on another computer?). Stop the other copy, then press Resync.`, { kind: 'system' });

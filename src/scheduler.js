@@ -43,7 +43,10 @@ const clock = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Numbe
 onSendRejected((accountId, msgId, jid, code) => {
   const d = db();
   const rec = d.sends.find((s) => Object.entries(s.results || {}).some(([j, r]) => j === jid && r.msgId === msgId));
-  if (!rec) return;
+  if (!rec) { // e.g. a preview sent by hand
+    log('warn', `WhatsApp refused a message to ${jid}. ${describeRejection(code).text}`, { kind: 'notsent' });
+    return;
+  }
   const r = rec.results[jid];
   const why = describeRejection(code);
   rec.results[jid] = { ...r, ok: false, permanent: why.permanent, error: why.text };

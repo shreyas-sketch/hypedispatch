@@ -118,7 +118,8 @@ app.delete('/api/programmes/:id', wrap((req, res) => {
 app.post('/api/programmes/:id/facts', wrap(async (req, res) => {
   const p = findProg(req.params.id);
   const pageText = req.body.pastedText?.trim() || await fetchPageText(p.landingUrl);
-  p.pageText = pageText;
+  delete p.pageText;
+  p.pageChars = pageText.length;
   p.factSheet = await extractFacts(pageText, p.focus);
   p.factsAt = new Date().toISOString();
   save();
