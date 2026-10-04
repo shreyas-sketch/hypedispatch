@@ -486,7 +486,8 @@ function wsStatus(w) {
 function nextFor(w) {
   const m = S.lineup.find((x) => x.workshopId === w.id);
   if (!m) return isPast(w) ? '' : 'Nothing more to send';
-  return `Next: ${PHASE_LABEL[m.phase]} · ${dayLabel(m.date)} ${m.due ? '(sending now)' : fmt12(m.time)}`;
+  if (m.blocked) return `Next: ${PHASE_TEXT[m.phase]} won't send until fixed`;
+  return `Next: ${PHASE_TEXT[m.phase]} · ${m.due ? 'sending now' : `${dayLabel(m.date)}, ${fmt12(m.time)}`}`;
 }
 
 let wsFilter = 'upcoming';
@@ -506,13 +507,13 @@ function renderWorkshops() {
   }
   $('wsList').innerHTML = list.map((w) => {
     const st = wsStatus(w), past = isPast(w);
-    return `<div class="wl" onclick="openEditor('${w.id}')" title="Open">
+    return `<div class="wl" tabindex="0" role="button" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}" title="Open">
       <div><div class="nm">${esc(progById(w.programmeId)?.name || w.displayName)}</div><div class="small muted">${niceDate(w.date)}${w.timeLabelShown ? ' · ' + esc(w.timeLabelShown) : ''}${w.name ? ' · ' + esc(w.name) : ''}</div></div>
       <div class="st">${st.problem ? `<button class="pill ${st.cls}" title="${st.fixText}" onclick="event.stopPropagation();${st.fix}">${st.text} →</button>` : `<span class="pill ${st.cls}">${st.text}</span>`}</div>
       <div class="nx small muted">${esc(nextFor(w))}</div>
       <div class="acts" onclick="event.stopPropagation()">
         ${past ? `<button class="small" onclick="dupWorkshop('${w.id}')">⧉ Run again</button>` : ''}
-        <details class="menu"><summary aria-label="More actions">⋯</summary><div class="menu-list">
+        <details class="menu" ontoggle="if(this.open) closeMenus(this)"><summary aria-label="More actions">⋯</summary><div class="menu-list">
           <button onclick="closeMenus();openEditor('${w.id}')">✏️ Edit</button>
           ${past ? '' : `<button onclick="closeMenus();openEditor('${w.id}','reschedule')">📅 Reschedule</button>`}
           <button onclick="closeMenus();dupWorkshop('${w.id}')">⧉ Duplicate for the next run</button>
@@ -522,7 +523,7 @@ function renderWorkshops() {
       </div></div>`;
   }).join('');
 }
-function closeMenus() { document.querySelectorAll('details.menu[open]').forEach((d) => { d.open = false; }); }
+function closeMenus(except) { document.querySelectorAll('details.menu[open]').forEach((d) => { if (d !== except) d.open = false; }); }
 document.addEventListener('click', (e) => document.querySelectorAll('details.menu[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
 
 async function togglePause(id) {
@@ -537,8 +538,9 @@ async function deleteWorkshopById(id) {
 // Copy a workshop for its next run: same programme, number, links and times; new date; pick this run's groups
 function dupWorkshop(id) {
   const src = S.workshops.find((x) => x.id === id);
+  const taken = new Set(S.workshops.filter((w) => w.programmeId === src.programmeId).map((w) => w.date));
   let date = addDays(src.date, 7);
-  while (date < S.now.date) date = addDays(date, 7);
+  while (date < S.now.date || taken.has(date)) date = addDays(date, 7);
   const copy = {};
   for (const k of ['programmeId', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'formLink', 'zoomLink', 'account']) copy[k] = src[k];
   openEditor(null, null, { ...copy, date, firstSendDate: S.now.date, active: true, groups: [], copiedFrom: src });
@@ -855,6 +857,13 @@ function renderPlan() {
   if (!picked.size) notes.push('⚠️ No groups picked yet, so nothing can be sent.');
   if (p && !p.factSheet) notes.push(`⚠️ ${esc(p.name)} has no fact sheet yet, so nothing can be sent.`);
   if (v('dayOf') === 'true' && v('startTime') && (v('dayOfTime') || '10:00') >= v('startTime')) notes.push(`⚠️ The workshop-day message (${dayOfAt}) is set for after the start time (${fmt12(v('startTime'))}), so it would never go out. Change it under More settings.`);
+  const others = S.workshops.filter((w) => w.id !== cur?.id && w.date >= today);
+  const twin = others.find((w) => w.programmeId === v('programmeId') && w.date === date);
+  if (twin) notes.push(`⚠️ <b>${esc(twin.displayName)}</b> already exists. Saving this too would send every message twice.`);
+  for (const g of picked.values()) {
+    const also = others.find((w) => (w.groups || []).some((x) => x.jid === g.jid));
+    if (also) { notes.push(`⚠️ The group <b>${esc(g.name)}</b> also gets messages from <b>${esc(also.displayName)}</b>.`); break; }
+  }
   if (!form) notes.push('No bonus form link, so messages won\'t include one.');
   if (!zoom) notes.push('No Zoom link yet. Add it before the day-before message.');
   if (p?.signature) notes.push(`Every message ends with: ${waFormat(p.signature).replace(/\n/g, ' · ')}`);
@@ -901,6 +910,8 @@ async function saveWorkshop(silent) {
   await busy(null, async () => {
     const body = collect();
     if (!silent && body.groups.length && !body.account) throw new Error('Pick the sending number');
+    const twin = S.workshops.find((w) => w.id !== cur?.id && w.programmeId === body.programmeId && w.date === body.date);
+    if (twin && (silent !== true || !cur) && !confirm(`${twin.displayName} already exists. Save anyway? Every message would go out twice.`)) return;
     cur = cur ? await api('/api/workshops/' + cur.id, { method: 'PUT', body }) : await api('/api/workshops', { method: 'POST', body });
     $('delBtn').hidden = false;
     await refresh();
