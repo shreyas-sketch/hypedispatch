@@ -53,7 +53,10 @@ export function syncWorkshopGroups(accountId, groups) {
   return { renamed, missing };
 }
 
+// "Akshat Consulting · Tue, 6 Oct" (readable everywhere: dashboard, logs, activity)
+export const shortDate = (iso) => (iso ? new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '');
+
 export function displayName(ws) {
   const prog = programmeOf(ws);
-  return ws.name || `${prog?.name || 'Workshop'} · ${ws.date}`;
+  return ws.name || `${prog?.name || 'Workshop'} · ${shortDate(ws.date)}`;
 }

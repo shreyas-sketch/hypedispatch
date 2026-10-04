@@ -118,7 +118,7 @@ main>*,.cols>*{min-width:0} /* let wide tables scroll inside their card instead 
 .tabs a.on{color:var(--ink);background:var(--bg);box-shadow:inset 0 -2px 0 var(--accent)}
 .tabs .pill{padding:1px 8px;font-size:11px}
 [data-tab]{display:none}
-body[data-view="week"] [data-tab~="week"],body[data-view="programmes"] [data-tab~="programmes"],
+body[data-view="workshops"] [data-tab~="workshops"],body[data-view="schedule"] [data-tab~="schedule"],body[data-view="programmes"] [data-tab~="programmes"],
 body[data-view="numbers"] [data-tab~="numbers"],body[data-view="history"] [data-tab~="history"]{display:block}
 body[data-view="history"] .cols[data-tab~="history"]{display:grid}
 .setup ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
@@ -130,6 +130,32 @@ button.pill{border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600}
 button.pill:hover{filter:brightness(.95);text-decoration:underline}
 .week td.name:focus-visible,.tabs a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .hint{background:var(--accent-soft);border-radius:10px;padding:10px 12px;font-size:13px}
+.banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--accent-soft);border-radius:var(--r);padding:12px 16px;font-size:13px}
+.attention h2{color:var(--bad)}
+.attention .item{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.attention .item:first-of-type{border-top:0}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:8px;color:var(--muted);font-size:13px}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.wl{display:grid;grid-template-columns:minmax(200px,1.6fr) minmax(150px,1fr) minmax(170px,1.3fr) auto;gap:12px;align-items:center;padding:11px 8px;border-top:1px solid var(--line);cursor:pointer;border-radius:10px}
+.wl:first-child{border-top:0}
+.wl:hover{background:var(--bg)}
+.wl .nm{font-weight:600}
+.wl .acts{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+@media (max-width:760px){.wl{grid-template-columns:1fr auto}.wl .st,.wl .nx{grid-column:1}}
+.menu{position:relative}
+.menu summary{list-style:none;cursor:pointer;padding:4px 10px;border:1px solid var(--line);border-radius:8px;font-weight:700;user-select:none}
+.menu summary::-webkit-details-marker{display:none}
+.menu-list{position:absolute;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.25);padding:6px;display:grid;min-width:210px;z-index:20}
+.menu-list button{border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:8px;font-weight:500}
+.menu-list button:hover{background:var(--bg)}
+.menu-list button.danger{color:var(--bad)}
+.td{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.td:first-child{border-top:0}
+.td .when{min-width:70px;font-weight:600;font-size:13px}
+.td .grow{flex:1 1 220px;min-width:0}
+@media (max-width:600px){.td{gap:8px}.td .when{min-width:48px}}
+.g .sugg{font-size:11px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;opacity:0;transition:.2s;pointer-events:none;z-index:99}
 .toast.show{opacity:1}
 </style>
@@ -138,7 +164,8 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
 <header>
   <h1>Hype<span>.</span>Dispatch</h1>
   <nav class="tabs" aria-label="Sections">
-    <a href="#week" data-go="week"><span class="long">This week</span><span class="short">Week</span></a>
+    <a href="#workshops" data-go="workshops">Workshops <span class="pill bad" id="tabWs" hidden></span></a>
+    <a href="#schedule" data-go="schedule">Schedule</a>
     <a href="#programmes" data-go="programmes">Programmes <span class="pill" id="tabProg"></span></a>
     <a href="#numbers" data-go="numbers"><span class="long">WhatsApp numbers</span><span class="short">Numbers</span> <span class="pill" id="tabNum"></span></a>
     <a href="#history" data-go="history"><span class="long">Activity log</span><span class="short">Activity</span> <span class="pill" id="tabHist" hidden></span></a>
@@ -150,9 +177,32 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
 </header>
 
 <main>
-  <section class="card setup" id="setup" data-tab="week" hidden></section>
+  <div class="banner" id="setup" data-tab="workshops" hidden></div>
+  <section class="card attention" id="attention" data-tab="workshops" hidden></section>
 
-  <section class="card" data-tab="week">
+  <section class="card" data-tab="workshops">
+    <div class="row" style="margin-bottom:8px">
+      <h2 style="margin:0">Today</h2>
+      <span class="muted small" id="todaySub"></span>
+    </div>
+    <div id="today"></div>
+  </section>
+
+  <section class="card" data-tab="workshops">
+    <div class="row" style="margin-bottom:12px">
+      <h2 style="margin:0">Workshops</h2>
+      <div class="seg" id="wsFilter">
+        <button data-f="upcoming" class="on" onclick="setWsFilter('upcoming')">Upcoming <span id="cUp"></span></button>
+        <button data-f="attention" onclick="setWsFilter('attention')">Needs attention <span id="cAt"></span></button>
+        <button data-f="past" onclick="setWsFilter('past')">Past <span id="cPast"></span></button>
+      </div>
+      <span class="grow"></span>
+      <button class="primary" onclick="openEditor()">+ Add workshop</button>
+    </div>
+    <div id="wsList"></div>
+  </section>
+
+  <section class="card" data-tab="schedule">
     <div class="row" style="margin-bottom:10px">
       <h2 style="margin:0">Lined up next</h2>
       <span class="muted small">Messages that will go out automatically. Nothing needs approving; open a workshop to change or pause it.</span>
@@ -160,12 +210,12 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     <div id="lineup"></div>
   </section>
 
-  <section class="card" data-tab="week">
+  <section class="card" data-tab="schedule">
     <div class="row" style="margin-bottom:14px">
-      <h2 style="margin:0">This week</h2>
-      <span class="muted small">What each workshop sends, day by day (IST)</span>
+      <h2 style="margin:0">Next 7 days</h2>
+      <span class="muted small">What each workshop sends, day by day (IST). Click a workshop to open it.</span>
       <span class="grow"></span>
-      <button class="primary" onclick="openEditor()">+ New workshop</button>
+      <button class="primary" onclick="openEditor()">+ Add workshop</button>
     </div>
     <div class="week" id="week"></div>
     <div class="row small muted" style="margin-top:12px;gap:14px">
@@ -269,6 +319,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
           <input id="f_startTime" type="time"></label>
       </div>
       <div id="factWarn" class="small" style="margin-top:8px;color:var(--bad)"></div>
+      <div id="prefillNote" class="hint" style="margin-top:10px" hidden></div>
     </div>
 
     <div class="section">
@@ -383,10 +434,11 @@ const niceDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', {
 const progById = (id) => S.programmes.find((p) => p.id === id);
 
 // ---------- navigation (tabs follow the URL hash, so Back works) ----------
-const VIEWS = ['week', 'programmes', 'numbers', 'history'];
+const VIEWS = ['workshops', 'schedule', 'programmes', 'numbers', 'history'];
 function go(view) { if (location.hash !== '#' + view) location.hash = view; else showView(); }
 function showView() {
-  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'week';
+  const h = location.hash.slice(1);
+  const v = VIEWS.includes(h) ? h : h === 'week' ? 'schedule' : 'workshops';
   document.body.dataset.view = v;
   document.querySelectorAll('.tabs a').forEach((a) => { const on = a.dataset.go === v; a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); });
   if (v === 'history' && S) loadActivity();
@@ -398,21 +450,127 @@ function aiHelp() {
 }
 
 // First-run checklist on the week view; disappears once everything is set up
+// Setup: one line with the next step, only while something is left
 function renderSetup() {
   const ready = S.programmes.filter((p) => p.factSheet).length;
   const connected = S.accounts.filter((a) => a.status === 'connected').length;
   const steps = [
-    { done: S.aiReady, title: 'Add your Anthropic key', text: 'Paste it in the .env file after ANTHROPIC_API_KEY= and restart (on Railway: add it under Variables).', btn: '' },
-    { done: connected > 0, title: 'Connect a WhatsApp number', text: S.accounts.length ? 'A number is added but not connected yet. Scan its QR.' : 'Scan a QR from your phone once.', btn: `<button class="small" onclick="go('numbers')">Open WhatsApp numbers</button>` },
-    { done: ready > 0, title: 'Build fact sheets', text: `${ready} of ${S.programmes.length} programmes ready. Each is built once from its landing page.`, btn: `<button class="small" onclick="go('programmes')">Open Programmes</button>` },
-    { done: S.workshops.length > 0, title: 'Add your first workshop', text: 'Pick the programme, date, links and community.', btn: `<button class="small primary" onclick="openEditor()">+ New workshop</button>` },
+    { done: S.aiReady, title: 'Add your Anthropic key', text: 'Paste it in .env (on Railway: Variables) and restart.', btn: '' },
+    { done: connected > 0, title: 'Connect a WhatsApp number', text: S.accounts.length ? 'A number is added but not connected. Scan its QR.' : 'Scan a QR from your phone once.', btn: `<button class="small" onclick="go('numbers')">Open WhatsApp numbers</button>` },
+    { done: ready > 0, title: 'Build fact sheets', text: `${ready} of ${S.programmes.length} ready.`, btn: `<button class="small" onclick="go('programmes')">Open Programmes</button>` },
+    { done: S.workshops.length > 0, title: 'Add your first workshop', text: '', btn: `<button class="small primary" onclick="openEditor()">+ Add workshop</button>` },
   ];
-  const left = steps.filter((x) => !x.done).length;
-  $('setup').hidden = !left;
-  if (!left) return;
-  $('setup').innerHTML = `<h2>Getting started <span class="pill">${steps.length - left} of ${steps.length} done</span></h2><ol>${steps.map((x, i) => `
-    <li class="${x.done ? 'done' : ''}"><span class="tick">${x.done ? '✓' : i + 1}</span>
-      <div class="grow"><div style="font-weight:600">${x.title}</div><div class="small muted">${x.text}</div></div>${x.done ? '' : x.btn}</li>`).join('')}</ol>`;
+  const next = steps.find((x) => !x.done);
+  $('setup').hidden = !next;
+  if (!next) return;
+  $('setup').innerHTML = `<b>Finish setup (${steps.filter((x) => x.done).length} of ${steps.length}):</b> <span>${next.title}. <span class="muted">${next.text}</span></span><span class="grow"></span>${next.btn}`;
+}
+
+// ---------- Workshops home ----------
+const dayLabel = (d) => d === S.now.date ? 'Today' : d === addDays(S.now.date, 1) ? 'Tomorrow' : niceDate(d);
+const isPast = (w) => w.date < S.now.date && !w.pendingReschedule;
+// What state a workshop is in; problem = something that stops messages going out
+function wsStatus(w) {
+  if (isPast(w)) return { cls: '', text: 'Finished' };
+  const prog = progById(w.programmeId);
+  const acc = S.accounts.find((a) => a.id === w.account);
+  if (w.active === false) return { cls: '', text: '⏸ Paused' };
+  if (!prog) return { cls: 'bad', text: 'Programme deleted', problem: true, fix: `openEditor('${w.id}')`, fixText: 'Pick a programme' };
+  if (!prog.factSheet) return { cls: 'bad', text: '⚠️ Fact sheet missing', problem: true, fix: `openProg('${prog.id}')`, fixText: 'Build it' };
+  if (!w.groups?.length) return { cls: 'warn', text: '⚠️ No groups picked', problem: true, fix: `openEditor('${w.id}','groups')`, fixText: 'Pick groups' };
+  if (!w.account || !acc) return { cls: 'warn', text: '⚠️ No sending number', problem: true, fix: `openEditor('${w.id}','groups')`, fixText: 'Pick a number' };
+  if (acc.status !== 'connected') return { cls: 'bad', text: '⚠️ WhatsApp not connected', problem: true, fix: "go('numbers')", fixText: 'Reconnect' };
+  if (w.pendingReschedule) return { cls: 'reschedule', text: `📅 Moving to ${niceDate(w.pendingReschedule.date)}` };
+  return { cls: 'ok', text: `✅ Auto · ${w.groups.length} group${w.groups.length > 1 ? 's' : ''}` };
+}
+function nextFor(w) {
+  const m = S.lineup.find((x) => x.workshopId === w.id);
+  if (!m) return isPast(w) ? '' : 'Nothing more to send';
+  return `Next: ${PHASE_LABEL[m.phase]} · ${dayLabel(m.date)} ${m.due ? '(sending now)' : fmt12(m.time)}`;
+}
+
+let wsFilter = 'upcoming';
+function setWsFilter(f) { wsFilter = f; document.querySelectorAll('#wsFilter button').forEach((b) => b.classList.toggle('on', b.dataset.f === f)); renderWorkshops(); }
+
+function renderWorkshops() {
+  if (document.querySelector('#wsList details.menu[open]')) return; // don't close a menu that's open
+  const upcoming = S.workshops.filter((w) => !isPast(w)).sort((a, b) => a.date.localeCompare(b.date));
+  const attention = upcoming.filter((w) => wsStatus(w).problem);
+  const past = S.workshops.filter(isPast).sort((a, b) => b.date.localeCompare(a.date));
+  $('cUp').textContent = upcoming.length; $('cAt').textContent = attention.length; $('cPast').textContent = past.length;
+  $('tabWs').hidden = !attention.length; $('tabWs').textContent = attention.length;
+  const list = wsFilter === 'past' ? past : wsFilter === 'attention' ? attention : upcoming;
+  if (!list.length) {
+    $('wsList').innerHTML = `<div class="empty">${wsFilter === 'attention' ? 'Nothing needs attention 🎉' : wsFilter === 'past' ? 'No finished workshops yet' : 'No upcoming workshops. Press <b>+ Add workshop</b>, or open <b>Past</b> and press <b>Run again</b> on last week\'s.'}</div>`;
+    return;
+  }
+  $('wsList').innerHTML = list.map((w) => {
+    const st = wsStatus(w), past = isPast(w);
+    return `<div class="wl" onclick="openEditor('${w.id}')" title="Open">
+      <div><div class="nm">${esc(progById(w.programmeId)?.name || w.displayName)}</div><div class="small muted">${niceDate(w.date)}${w.timeLabelShown ? ' · ' + esc(w.timeLabelShown) : ''}${w.name ? ' · ' + esc(w.name) : ''}</div></div>
+      <div class="st">${st.problem ? `<button class="pill ${st.cls}" title="${st.fixText}" onclick="event.stopPropagation();${st.fix}">${st.text} →</button>` : `<span class="pill ${st.cls}">${st.text}</span>`}</div>
+      <div class="nx small muted">${esc(nextFor(w))}</div>
+      <div class="acts" onclick="event.stopPropagation()">
+        ${past ? `<button class="small" onclick="dupWorkshop('${w.id}')">⧉ Run again</button>` : ''}
+        <details class="menu"><summary aria-label="More actions">⋯</summary><div class="menu-list">
+          <button onclick="closeMenus();openEditor('${w.id}')">✏️ Edit</button>
+          ${past ? '' : `<button onclick="closeMenus();openEditor('${w.id}','reschedule')">📅 Reschedule</button>`}
+          <button onclick="closeMenus();dupWorkshop('${w.id}')">⧉ Duplicate for the next run</button>
+          ${past ? '' : `<button onclick="closeMenus();togglePause('${w.id}')">${w.active === false ? '▶️ Resume sending' : '⏸ Pause sending'}</button>`}
+          <button class="danger" onclick="closeMenus();deleteWorkshopById('${w.id}')">🗑 Delete</button>
+        </div></details>
+      </div></div>`;
+  }).join('');
+}
+function closeMenus() { document.querySelectorAll('details.menu[open]').forEach((d) => { d.open = false; }); }
+document.addEventListener('click', (e) => document.querySelectorAll('details.menu[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
+
+async function togglePause(id) {
+  const w = S.workshops.find((x) => x.id === id);
+  await busy(null, async () => { await api('/api/workshops/' + id, { method: 'PUT', body: { active: w.active === false } }); toast(w.active === false ? 'Sending resumed' : 'Paused: nothing will be sent'); await refresh(); });
+}
+async function deleteWorkshopById(id) {
+  const w = S.workshops.find((x) => x.id === id);
+  if (!confirm(`Delete ${w.displayName}?`)) return;
+  await busy(null, async () => { await api('/api/workshops/' + id, { method: 'DELETE' }); toast('Deleted'); await refresh(); });
+}
+// Copy a workshop for its next run: same programme, number, links and times; new date; pick this run's groups
+function dupWorkshop(id) {
+  const src = S.workshops.find((x) => x.id === id);
+  let date = addDays(src.date, 7);
+  while (date < S.now.date) date = addDays(date, 7);
+  const copy = {};
+  for (const k of ['programmeId', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'formLink', 'zoomLink', 'account']) copy[k] = src[k];
+  openEditor(null, null, { ...copy, date, firstSendDate: S.now.date, active: true, groups: [], copiedFrom: src });
+}
+
+// Problems in one place (upcoming workshops that can't send, plus groups failing today)
+function renderAttention() {
+  const items = [];
+  for (const w of S.workshops.filter((x) => !isPast(x))) {
+    const st = wsStatus(w);
+    if (st.problem) items.push(`<div class="item"><b>${esc(w.displayName)}</b><span class="pill ${st.cls}">${st.text.replace('⚠️ ', '')}</span><span class="grow"></span><button class="small" onclick="${st.fix}">${st.fixText} →</button></div>`);
+  }
+  for (const m of S.lineup.filter((x) => x.retry)) items.push(`<div class="item"><b>${esc(m.workshop)}</b><span class="small" style="color:var(--warn)">⏳ ${esc(m.retry)}</span><span class="grow"></span><button class="small" onclick="go('history')">See activity →</button></div>`);
+  $('attention').hidden = !items.length;
+  $('attention').innerHTML = `<h2>⚠️ ${items.length} thing${items.length > 1 ? 's' : ''} need${items.length > 1 ? '' : 's'} attention</h2>${items.join('')}`;
+}
+
+// What goes out today: still to come, then already sent
+let showAllToday = false;
+function renderToday() {
+  const todayItems = S.lineup.filter((m) => m.date === S.now.date);
+  const sent = S.sends.filter((x) => x.date === S.now.date && x.done);
+  const rows = [];
+  for (const m of todayItems) rows.push(`<div class="td"><div class="when">${m.due && !m.blocked ? 'Now' : fmt12(m.time)}</div><span class="pill ${m.phase}">${PHASE_LABEL[m.phase]}</span><span class="grow">${esc(m.workshop)} <span class="small muted">· ${m.groups} group${m.groups === 1 ? '' : 's'}</span></span>${m.blocked ? `<span class="pill bad">Won't send: ${esc(m.blocked)}</span>` : m.retry ? `<span class="small" style="color:var(--warn)">⏳ retrying</span>` : ''}<button class="small" onclick="quickPreview('${m.workshopId}','${m.phase}')">Preview</button></div>`);
+  for (const x of sent) {
+    const r = Object.values(x.results || {}), ok = r.filter((y) => y.ok).length;
+    const at = r.map((y) => y.at).filter(Boolean).sort()[0];
+    rows.push(`<div class="td"><div class="when">${at ? clockOf(at) : ''}</div><span class="pill ${x.phase}">${PHASE_LABEL[x.phase]}</span><span class="grow">${esc(x.workshop)}</span><span class="pill ${ok === r.length ? 'ok' : 'warn'}">✓ Sent to ${ok}/${r.length}</span></div>`);
+  }
+  $('todaySub').textContent = `${todayItems.length} still to go · ${sent.length} sent`;
+  const shown = showAllToday ? rows : rows.slice(0, 6);
+  $('today').innerHTML = rows.length ? shown.join('') + (rows.length > 6 ? `<div style="margin-top:6px"><button class="ghost small" onclick="showAllToday=!showAllToday;renderToday()">${showAllToday ? 'Show less' : `Show all ${rows.length}`}</button></div>` : '') : '<div class="empty">Nothing goes out today</div>';
 }
 
 function renderTabs() {
@@ -472,7 +630,7 @@ const waFormat = (t) => esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(
 function renderWeek() {
   const days = [...Array(7)].map((_, i) => addDays(S.now.date, i));
   const ws = S.workshops.filter((w) => w.date >= S.now.date || w.pendingReschedule).sort((a, b) => a.date.localeCompare(b.date));
-  if (!ws.length) { $('week').innerHTML = '<div class="empty">No upcoming workshops yet. Add one to start the daily hype.<div style="margin-top:10px"><button class="primary" onclick="openEditor()">+ New workshop</button></div></div>'; return; }
+  if (!ws.length) { $('week').innerHTML = '<div class="empty">No upcoming workshops yet.<div style="margin-top:10px"><button class="primary" onclick="openEditor()">+ Add workshop</button></div></div>'; return; }
   const head = days.map((d, i) => `<th class="${i ? '' : 'today'}">${i ? niceDate(d) : 'Today'}</th>`).join('');
   const rows = ws.map((w) => {
     const prog = progById(w.programmeId);
@@ -494,11 +652,7 @@ function renderWeek() {
       const sent = S.sends.find((s) => s.key === `${w.id}|${d}|${p}` && s.done);
       return `<td class="cell"><span class="pill ${p}">${sent ? '✓ ' : ''}${PHASE_LABEL[p]}</span><div class="t">${t || ''}</div>${p === 'dayof' ? '<div class="star">★ ' + fmt12(w.startTime) + '</div>' : ''}</td>`;
     }).join('');
-    return `<tr><td class="name" tabindex="0" role="button" title="Open to edit, reschedule or preview" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}">${esc(w.displayName)}<div class="small muted">${niceDate(w.date)} · ${esc(w.timeLabelShown)}</div><div style="margin-top:4px">${warn}</div>
-      <div class="row" style="gap:6px;margin-top:6px">
-        <button class="small" onclick="event.stopPropagation();openEditor('${w.id}')">Edit</button>
-        <button class="small" onclick="event.stopPropagation();openEditor('${w.id}','reschedule')" title="Move this workshop to a new date or time">${pr ? 'Pending reschedule' : '📅 Reschedule'}</button>
-      </div></td>${cells}</tr>`;
+    return `<tr><td class="name" tabindex="0" role="button" title="Open to edit, reschedule or preview" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}">${esc(progById(w.programmeId)?.name || w.displayName)}<div class="small muted">${niceDate(w.date)}${w.timeLabelShown ? ' · ' + esc(w.timeLabelShown) : ''}</div><div style="margin-top:4px">${warn}</div></td>${cells}</tr>`;
   }).join('');
   $('week').innerHTML = `<table><thead><tr><th>Workshop</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -580,7 +734,7 @@ async function refresh() {
   $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
   $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key ⓘ';
   document.querySelectorAll('.rsDelay').forEach((el) => { el.textContent = S.rescheduleDelay; });
-  renderTabs(); renderSetup(); renderLineup(); renderWeek(); renderProgs(); renderAccounts();
+  renderTabs(); renderSetup(); renderAttention(); renderToday(); renderWorkshops(); renderLineup(); renderWeek(); renderProgs(); renderAccounts();
   if (document.body.dataset.view === 'history' && Date.now() - (A?.loadedAt || 0) > 30_000) loadActivity();
 }
 
@@ -642,14 +796,17 @@ async function buildFacts() {
 
 // ---------- workshop editor ----------
 const F = ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'active', 'formLink', 'zoomLink', 'firstSendDate'];
-function openEditor(id, focus) {
+function openEditor(id, focus, prefill) {
   cur = id ? S.workshops.find((w) => w.id === id) : null;
-  const w = cur || { sendTime: '11:00', dayOf: true, dayOfTime: '10:00', active: true, date: addDays(S.now.date, 4), firstSendDate: S.now.date, startTime: '19:00' };
+  const w = cur || prefill || { sendTime: '11:00', dayOf: true, dayOfTime: '10:00', active: true, date: addDays(S.now.date, 4), firstSendDate: S.now.date, startTime: '19:00' };
   $('f_programmeId').innerHTML = '<option value="">Choose…</option>' + S.programmes.map((p) => `<option value="${p.id}">${esc(p.name)}${p.factSheet ? '' : ' (fact sheet not built)'}</option>`).join('');
-  $('edTitle').textContent = cur ? cur.displayName : 'New workshop';
+  $('edTitle').textContent = cur ? cur.displayName : prefill?.copiedFrom ? `New run of ${progById(prefill.programmeId)?.name || 'workshop'}` : 'New workshop';
+  const note = $('prefillNote');
+  note.hidden = !prefill?.copiedFrom;
+  if (prefill?.copiedFrom) note.innerHTML = `⧉ Copied from <b>${esc(prefill.copiedFrom.displayName)}</b>: same number, links and times. Check the date, the <b>bonus form</b> and <b>Zoom</b> links are right for this run, then pick this run's groups below.`;
   $('delBtn').hidden = !cur;
   for (const k of F) $('f_' + k).value = k === 'dayOf' || k === 'active' ? String(w[k] !== false) : w[k] ?? ''; // missing = on, same as the scheduler
-  $('f_programmeId').onchange = () => { checkFacts(); renderPlan(); }; checkFacts();
+  $('f_programmeId').onchange = () => { checkFacts(); if (!cur && !prefill) fillFromLastRun(); renderPlan(); }; checkFacts();
   $('moreSettings').open = !!cur && (cur.active === false || cur.dayOf === false);
   $('f_account').innerHTML = '<option value="">Choose sending number…</option>' + S.accounts.map((a) => `<option value="${a.id}" ${a.id === w.account ? 'selected' : ''}>${esc(a.name)} (${a.status})</option>`).join('');
   picked = new Map((w.groups || []).map((g) => [g.jid, g]));
@@ -663,6 +820,20 @@ function openEditor(id, focus) {
   if (focus === 'groups') { $('secGroups').scrollIntoView({ block: 'start' }); $('f_account').focus(); }
   if (focus === 'reschedule') { $('rsSection').scrollIntoView({ block: 'start' }); (cur?.pendingReschedule ? $('rsPending').querySelector('button') : $('r_date'))?.focus(); }
 }
+// New workshop: picking a programme fills in its last run's number, links and times
+function fillFromLastRun() {
+  const pid = $('f_programmeId').value;
+  const last = S.workshops.filter((w) => w.programmeId === pid).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const note = $('prefillNote');
+  if (!last) { note.hidden = true; return; }
+  for (const k of ['startTime', 'sendTime', 'dayOfTime', 'timeLabel']) $('f_' + k).value = last[k] || $('f_' + k).value;
+  $('f_dayOf').value = String(last.dayOf !== false);
+  for (const k of ['formLink', 'zoomLink']) if (!$('f_' + k).value.trim()) $('f_' + k).value = last[k] || '';
+  if (last.account && S.accounts.some((a) => a.id === last.account) && $('f_account').value !== last.account) { $('f_account').value = last.account; loadGroups(); }
+  note.hidden = false;
+  note.innerHTML = `↺ Filled in from the last run (<b>${esc(last.displayName)}</b>): number, times and links. Check the <b>bonus form</b> and <b>Zoom</b> links are right for this run.`;
+}
+
 // Plain-language summary of what this workshop will send, updated as you type
 function renderPlan() {
   const v = (k) => $('f_' + k).value;
@@ -780,16 +951,26 @@ async function resyncGroups() {
     finally { $('gResync').textContent = '↻ Resync groups'; }
   });
 }
+// Does a group name mention this date? e.g. "11th Oct", "11 October", "11/10"
+function matchesDate(name, iso) {
+  if (!iso || !name) return false;
+  const d = Number(iso.slice(8)), m = Number(iso.slice(5, 7));
+  const mon = new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' }).toLowerCase().slice(0, 3);
+  const n = name.toLowerCase();
+  return (new RegExp(`(^|[^0-9])0?${d}(st|nd|rd|th)?[^0-9a-z]{0,2}${mon}`).test(n)) || new RegExp(`(^|[^0-9])0?${d}[/.-]0?${m}([^0-9]|$)`).test(n);
+}
 function renderGroups() {
   const q = $('gSearch').value.toLowerCase();
+  const date = $('f_date').value;
   const known = new Map(allGroups.map((g) => [g.jid, g]));
   const list = [...[...picked.values()].filter((g) => !known.has(g.jid)), ...allGroups];
-  const shown = list.filter((g) => g.name?.toLowerCase().includes(q)).sort((a, b) => picked.has(b.jid) - picked.has(a.jid));
+  const rank = (g) => (picked.has(g.jid) ? 2 : matchesDate(g.name, date) ? 1 : 0);
+  const shown = list.filter((g) => g.name?.toLowerCase().includes(q)).sort((a, b) => rank(b) - rank(a));
   $('gCount').textContent = `${picked.size} selected`;
   $('groups').innerHTML = shown.length ? shown.map((g) => {
     const off = g.canPost === false && !picked.has(g.jid);
     return `<label class="g ${off ? 'disabled' : ''}"><input type="checkbox" ${picked.has(g.jid) ? 'checked' : ''} ${off ? 'disabled' : ''} onchange="toggleG('${g.jid}',this.checked)">
-      <span class="grow">${esc(g.name)}</span>
+      <span class="grow">${esc(g.name)}${!picked.has(g.jid) && matchesDate(g.name, date) ? ` <span class="pill ok sugg">Suggested: matches ${niceDate(date)}</span>` : ''}</span>
       ${g.community ? '<span class="pill">Community</span>' : ''}
       ${g.adminOnly ? `<span class="pill ${g.canPost ? '' : 'bad'}">${g.canPost ? 'Admin-only' : "Can't post"}</span>` : ''}
       ${g.size ? `<span class="small muted">${g.size}</span>` : ''}</label>`;
@@ -815,7 +996,7 @@ async function sendTest() { await busy(null, async () => { await api(`/api/works
 
 const editor = $('editor'), progDlg = $('progDlg'), qpDlg = $('qpDlg');
 editor.addEventListener('input', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
-editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
+editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); if (e.target.id === 'f_date' && allGroups.length) renderGroups(); });
 refresh(); setInterval(() => { if (!editor.open && !progDlg.open && !qpDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);
 </script>
 </body>

@@ -18,6 +18,7 @@ const authDir = (id) => {
 };
 
 export function accountStatus(id) {
+  if (process.env.HYPE_DRY_RUN) return { status: dryRunOffline.has(id) ? 'offline' : 'connected', qr: null, me: 'test-mode' }; // test mode: pretend connected
   const s = sessions.get(id);
   return { status: s?.status || 'offline', qr: s?.qr || null, me: s?.me || null };
 }
@@ -110,6 +111,9 @@ function live(id) {
 
 // Groups + community announcement channels this number is in
 export async function listGroups(id) {
+  if (process.env.HYPE_DRY_RUN) { // test mode: groups from HYPE_DRY_RUN_GROUPS="Name 1,Name 2"
+    return (process.env.HYPE_DRY_RUN_GROUPS || '').split(',').filter(Boolean).map((name, i) => ({ jid: `dry${i}@g.us`, name, size: 100, community: true, adminOnly: true, isAdmin: true, canPost: true }));
+  }
   const s = live(id);
   const all = await s.sock.groupFetchAllParticipating();
   const meNum = s.me?.split('@')[0];

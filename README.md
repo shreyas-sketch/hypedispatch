@@ -46,14 +46,18 @@ Keep the service at **1 replica**: two copies would each send every message. `ra
 
 ## Finding your way
 
-The dashboard has four tabs across the top. Each tab has its own link, so the browser Back button works.
+Five tabs across the top (each has its own link, so Back works):
 
-- **This week**: **Lined up next** lists every message that will go out automatically (no approval needed), with a Preview button and a clear warning if something would stop it sending. Below that, the week grid shows each workshop day by day. Until setup is finished, a **Getting started** checklist at the top links to each step.
-- **Programmes**: the landing pages and their fact sheets. The badge shows how many are ready (e.g. `3/10`).
-- **WhatsApp numbers**: connect a number by scanning its QR. The badge turns red if none is connected. **↻ Resync** reconnects with the same login (no QR) and reloads its groups and communities. Use it after joining a new community, or if a number seems stuck. It also updates renamed groups in your workshops and warns about groups the number has left. The workshop editor has the same button next to the group list.
-- **Activity log**: one timeline of everything: what was sent (open it to see the exact message and which groups got it, with times), what was **not** sent and why (e.g. paused, waiting for a date change, no groups picked, no fact sheet, WhatsApp disconnected), and every change made to a workshop. Filter by workshop, type and date, or search. A red badge shows how many things didn't go out today.
+- **Workshops** (home): a one-line setup reminder until setup is done, a **needs attention** box listing anything that would stop messages (no groups, no fact sheet, WhatsApp disconnected, groups failing), **Today** (what's still to go out today and what already went), and the list of workshops: **Upcoming / Needs attention / Past**, with **+ Add workshop** always at the top. Each workshop's **⋯** menu has Edit, Reschedule, **Duplicate for the next run**, Pause/Resume and Delete. Past workshops have a **Run again** button.
+- **Schedule**: everything lined up for the next few days, and a day-by-day grid.
+- **Programmes**: landing pages and fact sheets (badge: how many are ready).
+- **WhatsApp numbers**: connect, resync (badge: how many are connected).
+- **Activity log**: everything sent, not sent (and why), and every change.
 
-Warnings on a workshop are buttons: **Fact sheet missing** opens that programme, **No community picked** opens the workshop at the community step. Click a workshop's name (or tab to it and press Enter) to edit, reschedule or preview it.
+### Adding next week's workshops quickly
+- **Duplicate / Run again** copies the number, links and times and moves the date a week on. Check the bonus form and Zoom links, then pick the groups.
+- **+ Add workshop**: when you pick the programme, the number, times and links from its last run are filled in for you.
+- Groups whose name matches the workshop date (e.g. "11th Oct …", "11/10") are shown first, marked **Suggested**.
 
 ## First time: build the 10 fact sheets
 
