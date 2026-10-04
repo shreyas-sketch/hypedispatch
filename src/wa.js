@@ -1,7 +1,7 @@
 // WhatsApp connections (one per sending number) via Baileys.
 import makeWASocket, {
   useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion,
-  Browsers, jidNormalizedUser,
+  Browsers, jidNormalizedUser, WAMessageStatus,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import QRCode from 'qrcode';
@@ -12,6 +12,23 @@ import { dataDir } from './paths.js';
 import { rememberSent, findSent, forgetAccount } from './sentStore.js';
 
 const sessions = new Map(); // accountId -> { sock, status, qr, me }
+
+// WhatsApp can refuse a message AFTER sendMessage returned (e.g. not allowed to post in that group).
+// It arrives later as a messages.update with status ERROR; the scheduler subscribes here.
+const rejectedHandlers = [];
+export const onSendRejected = (fn) => rejectedHandlers.push(fn);
+export function reportRejected(accountId, msgId, jid, code) { for (const fn of rejectedHandlers) fn(accountId, msgId, jid, String(code || '')); }
+
+// Plain-English reason for a WhatsApp error code, and whether retrying could help
+export function describeRejection(code) {
+  const c = String(code || '');
+  if (/^(401|not-authorized)$/.test(c)) return { permanent: true, text: `WhatsApp refused it (${c}): this number isn't allowed to post here` };
+  if (/^(403|forbidden)$/.test(c)) return { permanent: true, text: `WhatsApp refused it (${c}): this number isn't allowed to post here (not an admin, or it's the community itself and not its announcements group)` };
+  if (/^(404|item-not-found)$/.test(c)) return { permanent: true, text: `WhatsApp refused it (${c}): the group no longer exists or this number left it` };
+  if (/^(406|not-acceptable)$/.test(c)) return { permanent: true, text: `WhatsApp refused it (${c}): this group doesn't accept messages from this number` };
+  if (c === '463') return { permanent: true, text: 'WhatsApp refused it (463): this number looks restricted by WhatsApp' };
+  return { permanent: false, text: `WhatsApp rejected it (error ${c || 'unknown'}), will retry` };
+}
 const authDir = (id) => {
   if (!/^[a-z0-9]+$/i.test(id || '')) throw new Error('Bad account id'); // never let an id escape data/auth
   return path.join(dataDir(), 'auth', id);
@@ -45,6 +62,11 @@ export async function startAccount(id) {
   const s = { sock, status: 'connecting', qr: null, me: null };
   sessions.set(id, s);
   sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('messages.update', (updates) => {
+    for (const u of updates) {
+      if (u.key?.fromMe && u.update?.status === WAMessageStatus.ERROR) reportRejected(id, u.key.id, u.key.remoteJid, u.update.messageStubParameters?.[0]);
+    }
+  });
 
   sock.ev.on('connection.update', async (u) => {
     if (u.qr) {
@@ -113,24 +135,36 @@ function live(id) {
 // Groups + community announcement channels this number is in
 export async function listGroups(id) {
   if (process.env.HYPE_DRY_RUN) { // test mode: groups from HYPE_DRY_RUN_GROUPS="Name 1,Name 2"
-    return (process.env.HYPE_DRY_RUN_GROUPS || '').split(',').filter(Boolean).map((name, i) => ({ jid: `dry${i}@g.us`, name, size: 100, community: true, adminOnly: true, isAdmin: true, canPost: true }));
+    return (process.env.HYPE_DRY_RUN_GROUPS || '').split(',').filter(Boolean).map((name, i) => ({ jid: `dry${i}@g.us`, name, kind: 'announcements', size: 100, community: true, adminOnly: true, isAdmin: true, canPost: true }));
   }
   const s = live(id);
   const all = await s.sock.groupFetchAllParticipating();
   // Our own ids: phone number and (Baileys 7) LID; participants may be listed by either
-  const mine = new Set([s.me, s.meLid, s.sock.user?.id, s.sock.user?.lid].filter(Boolean).map((j) => j.split('@')[0].split(':')[0]));
+  return toGroupList(all, [s.me, s.meLid, s.sock.user?.id, s.sock.user?.lid]);
+}
+
+// Turn WhatsApp's group metadata into the list shown in the group picker (exported for tests)
+export function toGroupList(all, myIds) {
+  const mine = new Set(myIds.filter(Boolean).map((j) => j.split('@')[0].split(':')[0]));
+  const names = new Map(Object.values(all).map((g) => [g.id, g.subject]));
   return Object.values(all).map((g) => {
     const me = g.participants?.find((p) => [p.id, p.jid, p.lid, p.phoneNumber]
       .filter(Boolean).some((j) => mine.has(j.split('@')[0].split(':')[0])));
     const isAdmin = !!(me?.admin || me?.isAdmin || me?.isSuperAdmin);
+    // A WhatsApp community comes back twice: the community itself (isCommunity) and its announcements
+    // group (isCommunityAnnounce), usually with the same name. Messages can only go to the announcements group.
+    const kind = g.isCommunityAnnounce ? 'announcements' : g.isCommunity ? 'community' : g.linkedParent ? 'community-group' : 'group';
     return {
       jid: g.id,
-      name: g.subject,
-      size: g.participants?.length || g.size || 0,
-      community: !!(g.isCommunityAnnounce || g.isCommunity),
+      name: g.subject || '(no name)',
+      parentName: g.linkedParent ? names.get(g.linkedParent) || '' : '',
+      kind,
+      size: g.size || g.participants?.length || 0,
+      community: kind !== 'group',
       adminOnly: !!g.announce,
       isAdmin,
-      canPost: !g.announce || isAdmin || !me, // !me = couldn't tell, let it try
+      canPost: kind === 'community' ? false : !g.announce || isAdmin || !me, // !me = couldn't tell, let it try
+      cantPostReason: kind === 'community' ? 'This is the community itself. WhatsApp only allows posting in its announcements group.' : '',
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -139,6 +173,7 @@ export async function listGroups(id) {
 export const dryRunSent = [];
 export const dryRunOffline = new Set();
 export const dryRunFailing = new Set();
+export const dryRunErrors = new Map(); // jid -> error message to throw (e.g. 'forbidden')
 
 export function isConnected(id) {
   if (process.env.HYPE_DRY_RUN) return !dryRunOffline.has(id);
@@ -152,13 +187,15 @@ export async function sendText(id, jid, text) {
   if (process.env.HYPE_DRY_RUN) {
     if (dryRunOffline.has(id)) throw new Error(`WhatsApp account "${id}" is not connected`);
     if (dryRunFailing.has(jid)) throw new Error('send failed (test)');
+    if (dryRunErrors.has(jid)) throw new Error(dryRunErrors.get(jid));
     dryRunSent.push({ id, jid, text });
-    return;
+    return `dry-${dryRunSent.length}`;
   }
   const s = live(id);
   // A half-dropped connection can make a send hang forever; give up and retry later instead
   const sent = await withTimeout(s.sock.sendMessage(jid, { text }), SEND_TIMEOUT_MS, 'Sending');
   rememberSent(id, sent); // needed to answer "please resend" requests from recipients' phones
+  return sent?.key?.id;
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

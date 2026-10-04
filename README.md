@@ -57,6 +57,7 @@ Five tabs across the top (each has its own link, so Back works):
 ### Adding next week's workshops quickly
 - **Duplicate / Run again** copies the number, links and times and moves the date a week on. Check the bonus form and Zoom links, then pick the groups.
 - **+ Add workshop**: when you pick the programme, the number, times and links from its last run are filled in for you.
+- **Communities:** WhatsApp lists a community twice with the same name: the community itself, and its **📢 Community announcements** group. Messages can only go to the announcements group, so the picker labels both and won't let you pick the community itself.
 - Groups whose name matches the workshop date (e.g. "11th Oct …", "11/10") are shown first, marked **Suggested**.
 
 ## First time: build the 10 fact sheets

@@ -861,6 +861,9 @@ function renderPlan() {
   const twin = others.find((w) => w.programmeId === v('programmeId') && w.date === date);
   if (twin) notes.push(`⚠️ <b>${esc(twin.displayName)}</b> already exists. Saving this too would send every message twice.`);
   for (const g of picked.values()) {
+    if (allGroups.find((x) => x.jid === g.jid)?.kind === 'community') notes.push(`⛔ <b>${esc(g.name)}</b> is the community itself, which can't receive messages. Untick it and pick its <b>📢 Community announcements</b> group instead.`);
+  }
+  for (const g of picked.values()) {
     const also = others.find((w) => (w.groups || []).some((x) => x.jid === g.jid));
     if (also) { notes.push(`⚠️ The group <b>${esc(g.name)}</b> also gets messages from <b>${esc(also.displayName)}</b>.`); break; }
   }
@@ -949,7 +952,7 @@ async function loadGroups() {
     return;
   }
   $('groups').innerHTML = '<div class="empty">Loading groups…</div>';
-  try { allGroups = await api(`/api/accounts/${acc}/groups`); }
+  try { allGroups = await api(`/api/accounts/${acc}/groups`); renderPlan(); }
   catch (e) { allGroups = []; $('groups').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
   renderGroups();
 }
@@ -975,15 +978,19 @@ function renderGroups() {
   const date = $('f_date').value;
   const known = new Map(allGroups.map((g) => [g.jid, g]));
   const list = [...[...picked.values()].filter((g) => !known.has(g.jid)), ...allGroups];
-  const rank = (g) => (picked.has(g.jid) ? 2 : matchesDate(g.name, date) ? 1 : 0);
+  const suggest = (g) => !picked.has(g.jid) && g.canPost !== false && matchesDate(g.name, date);
+  const rank = (g) => (picked.has(g.jid) ? 2 : suggest(g) ? 1 : 0);
   const shown = list.filter((g) => g.name?.toLowerCase().includes(q)).sort((a, b) => rank(b) - rank(a));
   $('gCount').textContent = `${picked.size} selected`;
   $('groups').innerHTML = shown.length ? shown.map((g) => {
     const off = g.canPost === false && !picked.has(g.jid);
     return `<label class="g ${off ? 'disabled' : ''}"><input type="checkbox" ${picked.has(g.jid) ? 'checked' : ''} ${off ? 'disabled' : ''} onchange="toggleG('${g.jid}',this.checked)">
-      <span class="grow">${esc(g.name)}${!picked.has(g.jid) && matchesDate(g.name, date) ? ` <span class="pill ok sugg">Suggested: matches ${niceDate(date)}</span>` : ''}</span>
-      ${g.community ? '<span class="pill">Community</span>' : ''}
-      ${g.adminOnly ? `<span class="pill ${g.canPost ? '' : 'bad'}">${g.canPost ? 'Admin-only' : "Can't post"}</span>` : ''}
+      <span class="grow">${esc(g.name)}${suggest(g) ? ` <span class="pill ok sugg">Suggested: matches ${niceDate(date)}</span>` : ''}</span>
+      ${g.kind === 'announcements' ? '<span class="pill ok">📢 Community announcements</span>'
+        : g.kind === 'community' ? `<span class="pill bad" title="${esc(g.cantPostReason)}">Community itself: can't post here</span>`
+        : g.kind === 'community-group' ? `<span class="pill" title="${esc(g.parentName)}">Group in ${esc(g.parentName || 'a community')}</span>`
+        : g.community ? '<span class="pill">Community</span>' : ''}
+      ${g.adminOnly && g.kind !== 'community' ? `<span class="pill ${g.canPost ? '' : 'bad'}">${g.canPost ? 'Admin-only' : "Can't post: you're not an admin"}</span>` : ''}
       ${g.size ? `<span class="small muted">${g.size}</span>` : ''}</label>`;
   }).join('') : '<div class="empty">No groups</div>';
   $('testJid').innerHTML = list.map((g) => `<option value="${g.jid}">${esc(g.name)}</option>`).join('');

@@ -4,7 +4,7 @@
 import { db, save, log } from './db.js';
 import { nowParts, phaseFor, sendTimeFor, addDays } from './time.js';
 import { composeMessage, withLinks, linksFor } from './ai.js';
-import { sendText, sleep, isConnected } from './wa.js';
+import { sendText, sleep, isConnected, onSendRejected, describeRejection } from './wa.js';
 import { resolve, timeLabelOf, displayName, programmeOf } from './workshop.js';
 
 const running = new Set();
@@ -38,6 +38,19 @@ function warnOnce(key, level, msg, extra = {}) {
 
 const PHASE_NAME = { hype: 'daily hype message', tomorrow: '"it\'s tomorrow" reminder', dayof: 'workshop-day message', reschedule: 'date-change announcement' };
 const clock = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}${m ? ':' + String(m).padStart(2, '0') : ''} ${ap}`; };
+
+// WhatsApp refused a message after it was sent: mark that group failed, retry only if it could help
+onSendRejected((accountId, msgId, jid, code) => {
+  const d = db();
+  const rec = d.sends.find((s) => Object.entries(s.results || {}).some(([j, r]) => j === jid && r.msgId === msgId));
+  if (!rec) return;
+  const r = rec.results[jid];
+  const why = describeRejection(code);
+  rec.results[jid] = { ...r, ok: false, permanent: why.permanent, error: why.text };
+  if (!why.permanent && (rec.rounds || 0) < MAX_ROUNDS) { rec.done = false; rec.nextTryAt = new Date(Date.now() + RETRY_EVERY_MIN * 60_000).toISOString(); }
+  save();
+  log(why.permanent ? 'error' : 'warn', `${rec.workshop}: ${PHASE_NAME[rec.phase]} did NOT reach ${r.name}. ${why.text}`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
+});
 
 function launch(key, fn, label) {
   if (running.has(key)) return;
@@ -217,20 +230,23 @@ export async function deliver(ws, rec, now = new Date()) {
   }
   delete rec.waiting;
   for (const g of ws.groups || []) {
-    if (rec.results[g.jid]?.ok) continue;
+    if (rec.results[g.jid]?.ok || rec.results[g.jid]?.permanent) continue; // done, or WhatsApp will never accept it
     try {
-      await sendText(ws.account, g.jid, rec.text);
-      rec.results[g.jid] = { ok: true, name: g.name, at: new Date().toISOString() };
+      const msgId = await sendText(ws.account, g.jid, rec.text);
+      rec.results[g.jid] = { ok: true, name: g.name, at: new Date().toISOString(), msgId };
     } catch (e) {
-      rec.results[g.jid] = { ok: false, name: g.name, error: e.message };
+      const code = e.output?.statusCode || e.data?.attrs?.code || e.message;
+      const why = /^(401|403|404|406|forbidden|not-authorized|item-not-found|not-acceptable)$/.test(String(code)) ? describeRejection(code) : null;
+      rec.results[g.jid] = { ok: false, name: g.name, error: why ? why.text : e.message, permanent: !!why?.permanent };
     }
     save();
     await sleep(GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN));
   }
   const current = new Set((ws.groups || []).map((g) => g.jid));
   const failed = Object.entries(rec.results).filter(([jid, r]) => !r.ok && current.has(jid)).map(([, r]) => r);
+  const retryable = failed.filter((r) => !r.permanent);
   rec.rounds = (rec.rounds || 0) + 1;
-  rec.done = failed.length === 0 || rec.rounds >= MAX_ROUNDS;
+  rec.done = retryable.length === 0 || rec.rounds >= MAX_ROUNDS;
   rec.nextTryAt = rec.done ? null : new Date(now.getTime() + RETRY_EVERY_MIN * 60_000).toISOString();
   save();
   const total = ws.groups?.length || 0;
@@ -238,6 +254,7 @@ export async function deliver(ws, rec, now = new Date()) {
   const tag = { workshopId: rec.workshopId, key: rec.key };
   const okNames = Object.values(rec.results).filter((r) => r.ok).map((r) => r.name).join(', ');
   if (!failed.length) log('info', `${rec.workshop}: ${PHASE_NAME[rec.phase]} sent to ${total}/${total} groups (${okNames})`, { ...tag, kind: 'sent' });
+  else if (rec.done && !retryable.length) log('error', `${rec.workshop}: ${PHASE_NAME[rec.phase]} sent to ${total - failed.length}/${total} groups. NOT sent to ${failedNames}: ${failed[0].error}`, { ...tag, kind: 'notsent' });
   else if (rec.done) log('error', `${rec.workshop}: gave up on ${failedNames} after ${rec.rounds} tries (${failed[0].error}). Send to them manually.`, { ...tag, kind: 'notsent' });
   else log('warn', `${rec.workshop}: ${PHASE_NAME[rec.phase]} sent to ${total - failed.length}/${total} groups. Retrying ${failedNames} in ${RETRY_EVERY_MIN} min (${failed[0].error})`, { ...tag, kind: 'notsent' });
 }

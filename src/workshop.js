@@ -43,14 +43,18 @@ export function syncWorkshopGroups(accountId, groups) {
   const byJid = new Map(groups.map((g) => [g.jid, g]));
   let renamed = 0;
   const missing = [];
+  const wrongKind = []; // the community itself was picked instead of its announcements group
   for (const ws of db().workshops.filter((w) => w.account === accountId)) {
     for (const g of ws.groups || []) {
       const now = byJid.get(g.jid);
       if (!now) missing.push({ workshop: displayName(ws), group: g.name });
-      else if (now.name && now.name !== g.name) { g.name = now.name; renamed++; }
+      else {
+        if (now.name && now.name !== g.name) { g.name = now.name; renamed++; }
+        if (now.kind === 'community') wrongKind.push({ workshop: displayName(ws), group: g.name });
+      }
     }
   }
-  return { renamed, missing };
+  return { renamed, missing, wrongKind };
 }
 
 // "Akshat Consulting · Tue, 6 Oct" (readable everywhere: dashboard, logs, activity)

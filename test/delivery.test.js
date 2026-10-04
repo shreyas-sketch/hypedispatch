@@ -26,7 +26,7 @@ process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), 'hype-delivery-')));
 
 const { db, save } = await import('../src/db.js');
 const { tick, lineup } = await import('../src/scheduler.js');
-const { dryRunSent, dryRunOffline, dryRunFailing } = await import('../src/wa.js');
+const { dryRunSent, dryRunOffline, dryRunFailing, dryRunErrors, reportRejected } = await import('../src/wa.js');
 const wait = () => new Promise((r) => setTimeout(r, 300));
 const at = async (t) => { await tick(new Date(`2026-09-30T${t}:00+05:30`)); await wait(); };
 
@@ -103,6 +103,38 @@ await tick(new Date('2026-10-03T15:01:00+05:30')); await wait();
 const w7 = dryRunSent.filter((m) => m.jid === 'w7@g.us');
 assert.equal(w7.length, 2, 'announcement + day-before reminder');
 assert.ok(!w7[0].text.includes('zoom.us') && w7[1].text.includes('https://zoom.us/j/7'), 'announcement first, then the reminder with the Zoom link');
+
+// 8. WhatsApp refuses a message AFTER it was sent (late error ack)
+dryRunSent.length = 0;
+d.workshops.push({ id: 'w8', programmeId: prog.id, date: '2026-10-20', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+  groups: [{ jid: 'p8@g.us', name: 'Perm8' }, { jid: 't8@g.us', name: 'Temp8' }], firstSendDate: '2026-09-01' });
+await tick(new Date('2026-10-12T11:00:00+05:30')); await wait();
+const r8 = () => d.sends.find((s) => s.key === 'w8|2026-10-12|hype');
+assert.ok(r8().done && r8().results['p8@g.us'].msgId, 'sent and message id recorded');
+reportRejected('a1', r8().results['p8@g.us'].msgId, 'p8@g.us', '403');   // not allowed to post: permanent
+reportRejected('a1', r8().results['t8@g.us'].msgId, 't8@g.us', '479');   // temporary
+assert.equal(r8().results['p8@g.us'].ok, false);
+assert.ok(r8().results['p8@g.us'].error.includes("isn't allowed to post"));
+assert.ok(d.log.some((l) => l.msg.includes('did NOT reach Perm8')), 'refusal shows in the activity log');
+assert.ok(!r8().done, 'temporary error re-opens the send for a retry');
+assert.ok(Date.parse(r8().nextTryAt) - Date.now() > 4 * 60_000, 'retry scheduled ~5 minutes out');
+r8().nextTryAt = new Date('2026-10-12T11:05:00+05:30').toISOString(); // line the retry up with this test's simulated clock
+const sentBefore = dryRunSent.length;
+await tick(new Date('2026-10-12T11:01:00+05:30')); await wait();
+assert.equal(dryRunSent.length, sentBefore, 'waits 5 minutes before retrying');
+await tick(new Date('2026-10-12T11:06:00+05:30')); await wait();
+const retried = dryRunSent.slice(sentBefore).map((m) => m.jid);
+assert.deepEqual(retried, ['t8@g.us'], 'only the temporary failure is retried, never the refused group');
+assert.ok(r8().done);
+
+// 9. A refusal at send time (e.g. "forbidden") is not retried for an hour
+d.workshops.push({ id: 'w9', programmeId: prog.id, date: '2026-10-20', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+  groups: [{ jid: 'f9@g.us', name: 'Forbidden9' }], firstSendDate: '2026-09-01' });
+dryRunErrors.set('f9@g.us', 'forbidden');
+await tick(new Date('2026-10-13T11:00:00+05:30')); await wait();
+const r9 = d.sends.find((s) => s.key === 'w9|2026-10-13|hype');
+assert.ok(r9.done && r9.rounds === 1, 'given up straight away');
+assert.ok(d.log.some((l) => l.msg.includes('NOT sent to Forbidden9') && l.msg.includes('not an admin')));
 
 console.log('Delivery tests passed ✓');
 fake.close();

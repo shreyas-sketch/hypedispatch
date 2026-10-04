@@ -84,12 +84,13 @@ app.post('/api/accounts/:id/resync', wrap(async (req, res) => {
   if (status === 'scan-qr') return res.json({ status, message: `${acc.name} needs to be linked again: scan the new QR` });
   if (status !== 'connected') throw new Error(`${acc.name} couldn't reconnect (${status}). Check that the phone is online and this server has internet, then try again.`);
   const groups = await listGroups(acc.id);
-  const { renamed, missing } = syncWorkshopGroups(acc.id, groups);
+  const { renamed, missing, wrongKind } = syncWorkshopGroups(acc.id, groups);
   save();
   const message = `${acc.name} resynced: ${groups.length} groups${renamed ? `, ${renamed} renamed` : ''}`
-    + (missing.length ? `. No longer in: ${missing.map((m) => `${m.group} (${m.workshop})`).join(', ')}` : '');
-  log(missing.length ? 'warn' : 'info', message, { kind: 'system' });
-  res.json({ status, groups: groups.length, renamed, missing, message });
+    + (missing.length ? `. No longer in: ${missing.map((m) => `${m.group} (${m.workshop})`).join(', ')}` : '')
+    + (wrongKind.length ? `. These workshops have a community itself picked, which can't receive messages; pick its announcements group instead: ${wrongKind.map((m) => `${m.group} (${m.workshop})`).join(', ')}` : '');
+  log(missing.length || wrongKind.length ? 'warn' : 'info', message, { kind: 'system' });
+  res.json({ status, groups: groups.length, renamed, missing, wrongKind, message });
 }));
 app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await listGroups(findAcc(req.params.id).id))));
 

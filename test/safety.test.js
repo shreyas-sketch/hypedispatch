@@ -102,5 +102,30 @@ assert.equal(reloaded.db().programmes.find((p) => p.name === 'Deepak Crypto' || 
   assert.equal(fresh2.findSent('acc1', 'MSG1'), undefined, 'removed with the number');
 }
 
+// Group picker: community itself vs its announcements group; admin detection by phone number or LID (Baileys 7)
+{
+  const { toGroupList } = await import('../src/wa.js');
+  const all = {
+    'c@g.us': { id: 'c@g.us', subject: '4th Oct Consulting', isCommunity: true, participants: [] },
+    'a@g.us': { id: 'a@g.us', subject: '4th Oct Consulting', isCommunityAnnounce: true, linkedParent: 'c@g.us', announce: true,
+      participants: [{ id: '123456@lid', phoneNumber: '919999999999@s.whatsapp.net', admin: 'admin' }] },
+    'b@g.us': { id: 'b@g.us', subject: 'Other announcements', isCommunityAnnounce: true, announce: true,
+      participants: [{ id: '777@lid', admin: null }, { id: '123456@lid', admin: null }] },
+    's@g.us': { id: 's@g.us', subject: 'Q&A group', linkedParent: 'c@g.us', participants: [] },
+    'n@g.us': { id: 'n@g.us', participants: [] }, // no name: must not crash
+  };
+  const list = toGroupList(all, ['919999999999:12@s.whatsapp.net', '123456:12@lid']);
+  const by = Object.fromEntries(list.map((g) => [g.jid, g]));
+  assert.equal(by['c@g.us'].kind, 'community'); assert.equal(by['c@g.us'].canPost, false, 'community itself is not postable');
+  assert.equal(by['a@g.us'].kind, 'announcements'); assert.equal(by['a@g.us'].canPost, true, 'admin found via LID');
+  assert.equal(by['b@g.us'].canPost, false, 'admin-only and we are not admin');
+  assert.equal(by['s@g.us'].kind, 'community-group'); assert.equal(by['s@g.us'].parentName, '4th Oct Consulting');
+  assert.equal(by['n@g.us'].name, '(no name)');
+  // resync flags workshops that picked the community itself
+  const { syncWorkshopGroups } = await import('../src/workshop.js');
+  d.workshops.push({ id: 'wc', programmeId: prog.id, date: '2026-10-10', account: 'accC', groups: [{ jid: 'c@g.us', name: '4th Oct Consulting' }] });
+  assert.equal(syncWorkshopGroups('accC', list).wrongKind.length, 1);
+}
+
 console.log('Safety tests passed ✓');
 process.exit(0);
