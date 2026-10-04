@@ -24,6 +24,12 @@ export function db() {
     if (!cache.programmes.some((x) => x.name === p.name)) cache.programmes.push({ id: newId(), ...p, factSheet: null });
     cache.seeded.push(p.name);
   }
+  // Repair workshops a bad request may have damaged in older versions (wrong types would break pages and sends)
+  for (const w of cache.workshops) {
+    if (!Array.isArray(w.groups)) w.groups = [];
+    w.groups = w.groups.filter((g) => g && typeof g.jid === 'string');
+    for (const k of ['active', 'dayOf']) if (typeof w[k] === 'string') w[k] = w[k] !== 'false';
+  }
   // Give existing seed programmes their signature once (a signature you've edited or cleared is kept)
   for (const p of SEED_PROGRAMMES) {
     const prog = cache.programmes.find((x) => x.name === p.name);

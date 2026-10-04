@@ -679,7 +679,7 @@ function renderAccounts() {
         <div style="margin-top:6px"><span class="pill ${cls[a.status] || ''}">${a.status}</span></div>
       </div>
       ${a.status === 'scan-qr' ? '' : `<button class="small" onclick="resync('${a.id}', this)" title="Reconnect with the same login and reload groups and communities from WhatsApp">↻ Resync</button>`}
-      <button class="ghost small" onclick="if(confirm('Log out and remove this number?'))api('/api/accounts/${a.id}',{method:'DELETE'}).then(refresh)">Remove</button>
+      <button class="ghost small" onclick="removeAccount('${a.id}')">Remove</button>
     </div>`).join('') : '<div class="empty">No numbers yet. Add one and scan the QR from your phone.</div>';
 }
 
@@ -746,6 +746,15 @@ async function resync(id, btn) {
     try { const r = await api(`/api/accounts/${id}/resync`, { method: 'POST' }); toast(r.message); }
     finally { btn.textContent = '↻ Resync'; await refresh(); }
   });
+}
+async function removeAccount(id) {
+  const acc = S.accounts.find((a) => a.id === id);
+  const using = S.workshops.filter((w) => w.account === id && w.date >= S.now.date);
+  const msg = using.length
+    ? `${using.length} upcoming workshop${using.length > 1 ? 's send' : ' sends'} from ${acc.name} (${using.slice(0, 3).map((w) => w.displayName).join(', ')}${using.length > 3 ? '…' : ''}). They will stop sending until you pick another number. Log out and remove it anyway?`
+    : `Log out and remove ${acc.name}?`;
+  if (!confirm(msg)) return;
+  await busy(null, async () => { await api('/api/accounts/' + id, { method: 'DELETE' }); toast('Number removed'); await refresh(); });
 }
 async function addAccount() { await busy(null, async () => { await api('/api/accounts', { method: 'POST', body: { name: $('accName').value } }); $('accName').value = ''; await refresh(); }); }
 

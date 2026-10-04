@@ -62,13 +62,19 @@ export async function tick(now = new Date()) {
   const { date, hm } = nowParts(now);
   const d = db();
   for (const ws of d.workshops) {
+    try { tickOne(ws, now, date, hm, d); } catch (e) { warnOnce(`${ws.id}|${date}|crash`, 'error', `Workshop ${ws.id} could not be checked (${e.message}). Open it and save it again.`, { kind: 'notsent', workshopId: ws.id }); }
+  }
+}
+
+function tickOne(ws, now, date, hm, d) {
+  {
     const name = displayName(ws);
     // Once today's send time has passed, any reason for NOT sending is written to the activity log (once a day)
     const slot = phaseFor(ws, date).phase;
     const slotDue = slot && hm >= sendTimeFor(ws, slot);
     const why = (reason, level = 'warn') => slotDue && warnOnce(`${ws.id}|${date}|why`, level,
       `${name}: today's ${PHASE_NAME[slot]} (${clock(sendTimeFor(ws, slot))}) was NOT sent: ${reason}`, { kind: 'notsent', workshopId: ws.id });
-    if (ws.active === false) { why('the workshop is paused (More settings → Sending)', 'info'); continue; }
+    if (ws.active === false) { why('the workshop is paused (More settings → Sending)', 'info'); return; }
 
     // 1. Pending reschedule: hold everything else for this workshop until it's announced
     const pr = ws.pendingReschedule;
@@ -76,31 +82,31 @@ export async function tick(now = new Date()) {
       if (pr.sendNow || now.getTime() >= Date.parse(sendAtOf(pr))) {
         launch(`${ws.id}|${date}|reschedule`, () => runReschedule(ws, date, now), name);
       } else why(`a date change to ${pr.date} is waiting to be announced (at ${clock(nowParts(new Date(sendAtOf(pr))).hm)}); regular messages pause until then`);
-      continue;
+      return;
     }
     // A reschedule went out today: finish delivering it. It replaces today's daily hype, but the
     // day-before and workshop-day messages still go out (they carry the Zoom link).
     const rrec = d.sends.find((s) => s.workshopId === ws.id && s.phase === 'reschedule' && s.date === date);
     if (rrec) {
       if (!rrec.done && !notYet(rrec, now)) launch(rrec.key, () => deliver(ws, rrec, now), name);
-      if (slot === 'hype' || !slot) { why('the date-change announcement went out today instead', 'info'); continue; }
-      if (!rrec.done) continue; // send the announcement first
+      if (slot === 'hype' || !slot) { why('the date-change announcement went out today instead', 'info'); return; }
+      if (!rrec.done) return; // send the announcement first
     }
 
     // 2. Regular daily message
-    if (ws.firstSendDate && date < ws.firstSendDate) { why(`it's set to start sending from ${ws.firstSendDate} (More settings → Start sending from)`); continue; }
+    if (ws.firstSendDate && date < ws.firstSendDate) { why(`it's set to start sending from ${ws.firstSendDate} (More settings → Start sending from)`); return; }
     const phase = slot;
-    if (!phase || !slotDue) continue;
+    if (!phase || !slotDue) return;
     const key = `${ws.id}|${date}|${phase}`;
     const rec = d.sends.find((s) => s.key === key);
     if (phase === 'dayof' && ws.startTime && hm >= ws.startTime && !rec?.done) {
       if (rec) { rec.done = true; rec.note = 'stopped: the workshop had started'; save(); }
       why(`the workshop had already started (${clock(ws.startTime)}) before it could go out`);
-      continue;
+      return;
     }
-    if (!ws.groups?.length) { why('no WhatsApp groups are picked for it'); continue; }
-    if (!ws.account) { why('no sending WhatsApp number is picked for it'); continue; }
-    if (rec?.done || notYet(rec, now)) continue;
+    if (!ws.groups?.length) { why('no WhatsApp groups are picked for it'); return; }
+    if (!ws.account) { why('no sending WhatsApp number is picked for it'); return; }
+    if (rec?.done || notYet(rec, now)) return;
     launch(key, () => runSend(ws, phase, date, key, now), name);
   }
 }
@@ -111,6 +117,13 @@ export function lineup(now = new Date(), days = 7) {
   const d = db();
   const out = [];
   for (const orig of d.workshops) {
+    try { lineupOne(orig, now, today, hm, d, days, out); } catch (e) { console.error('lineup:', orig.id, e.message); }
+  }
+  return out.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+}
+
+function lineupOne(orig, now, today, hm, d, days, out) {
+  {
     const base = { workshopId: orig.id, workshop: displayName(orig), groups: orig.groups?.length || 0 };
     const blocked = orig.active === false ? 'Paused'
       : !programmeOf(orig)?.factSheet ? 'Fact sheet missing'
@@ -144,7 +157,6 @@ export function lineup(now = new Date(), days = 7) {
       out.push({ ...base, phase, date: day, time, links: linksFor(ws, phase).map((l) => l.kind), blocked, retry, due: i === 0 && hm >= time });
     }
   }
-  return out.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 }
 
 // Draft once per day+phase, then deliver

@@ -42,7 +42,11 @@ const findWs = (id) => { const w = db().workshops.find((x) => x.id === id); if (
 // Only ids we created are allowed near the file system (auth folders are deleted by id)
 const findAcc = (id) => { const a = db().accounts.find((x) => x.id === id); if (!a) throw new Error('WhatsApp number not found'); return a; };
 const findProg = (id) => { const p = db().programmes.find((x) => x.id === id); if (!p) throw new Error('Programme not found'); return p; };
-const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+// A real calendar date (rejects "tomorrow", "2026-02-30", "")
+const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
+const isTime = (s) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s || '');
+
+const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.error('state:', e.message); return fallback; } };
 
 // ----- state -----
 app.get('/api/state', (req, res) => {
@@ -55,10 +59,10 @@ app.get('/api/state', (req, res) => {
     nowMs: Date.now(),
     tz: process.env.TIMEZONE || 'Asia/Kolkata',
     rescheduleDelay: RESCHEDULE_DELAY_MIN(),
-    lineup: lineup(),
+    lineup: safe(() => lineup(), []),
     programmes: d.programmes.map((p) => ({ ...p, pageText: undefined })),
     accounts: d.accounts.map((a) => ({ ...a, ...accountStatus(a.id) })),
-    workshops: d.workshops.map((w) => ({ ...w, displayName: displayName(w), timeLabelShown: timeLabelOf(w), today: phaseFor(w, date) })),
+    workshops: d.workshops.map((w) => ({ ...w, displayName: safe(() => displayName(w), 'Workshop'), timeLabelShown: safe(() => timeLabelOf(w), ''), today: safe(() => phaseFor(w, date), {}) })),
     sends: d.sends.slice(0, 60),
     log: (d.log || []).slice(0, 200),
   });
@@ -101,6 +105,8 @@ app.post('/api/programmes', wrap((req, res) => {
 }));
 app.put('/api/programmes/:id', wrap((req, res) => {
   const p = findProg(req.params.id);
+  if ('factSheet' in req.body && req.body.factSheet !== null && (typeof req.body.factSheet !== 'object' || Array.isArray(req.body.factSheet))) throw new Error('The fact sheet must be JSON like { "title": "…" }');
+  for (const k of ['name', 'landingUrl', 'focus', 'signature']) if (k in req.body && typeof req.body[k] !== 'string') throw new Error(`${k} must be text`);
   for (const k of ['name', 'landingUrl', 'focus', 'signature', 'factSheet']) if (k in req.body) p[k] = req.body[k];
   save(); res.json({ ...p, pageText: undefined });
 }));
@@ -123,11 +129,25 @@ app.post('/api/programmes/:id/facts', wrap(async (req, res) => {
 // ----- workshops (a dated run of a programme, sent to its communities) -----
 const FIELDS = ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime',
   'account', 'groups', 'zoomLink', 'formLink', 'active', 'firstSendDate'];
+// Check everything on a copy first, so a bad request can never leave a half-changed workshop behind
 function applyFields(ws, body) {
-  for (const k of FIELDS) if (k in body) ws[k] = body[k];
-  if (!isDate(ws.date)) throw new Error('Workshop date is required');
-  if (!ws.programmeId) throw new Error('Pick which programme (landing page) this is');
-  if (!Array.isArray(ws.groups)) ws.groups = [];
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Bad request');
+  const next = { ...ws };
+  for (const k of FIELDS) if (k in body) next[k] = body[k];
+  const str = (k) => { if (next[k] == null) next[k] = ''; if (typeof next[k] !== 'string') throw new Error(`${k} must be text`); next[k] = next[k].trim(); };
+  ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOfTime', 'account', 'zoomLink', 'formLink', 'firstSendDate'].forEach(str);
+  if (!isDate(next.date)) throw new Error('Pick the workshop date');
+  if (!next.programmeId) throw new Error('Pick which programme (landing page) this is');
+  if (next.programmeId !== ws.programmeId && !db().programmes.some((p) => p.id === next.programmeId)) throw new Error('That programme no longer exists');
+  // only check the number when it's being changed, so a workshop whose number was removed can still be paused/edited
+  if (next.account && next.account !== ws.account && !db().accounts.some((a) => a.id === next.account)) throw new Error('That WhatsApp number no longer exists');
+  for (const k of ['startTime', 'sendTime', 'dayOfTime']) if (next[k] && !isTime(next[k])) throw new Error(`${k === 'startTime' ? 'Start time' : 'Message time'} must look like 19:00`);
+  if (next.firstSendDate && !isDate(next.firstSendDate)) throw new Error('"Start sending from" must be a date');
+  for (const k of ['zoomLink', 'formLink']) if (next[k] && !/^https?:\/\/\S+$/i.test(next[k])) throw new Error(`The ${k === 'zoomLink' ? 'Zoom' : 'bonus form'} link must start with https://`);
+  for (const k of ['active', 'dayOf']) if (k in body) next[k] = body[k] !== false && body[k] !== 'false';
+  if (!Array.isArray(next.groups)) throw new Error('groups must be a list');
+  next.groups = next.groups.filter((g) => g && typeof g.jid === 'string' && g.jid).map((g) => ({ jid: g.jid, name: String(g.name || g.jid) }));
+  Object.assign(ws, next);
   return ws;
 }
 app.post('/api/workshops', wrap((req, res) => {
@@ -166,6 +186,7 @@ app.post('/api/workshops/:id/reschedule', wrap((req, res) => {
   const ws = findWs(req.params.id);
   const { date, startTime, timeLabel, sendNow } = req.body;
   if (!isDate(date)) throw new Error('Pick the new date');
+  if (startTime && !isTime(startTime)) throw new Error('The new start time must look like 19:00');
   if (date < nowParts().date) throw new Error('The new date is in the past');
   if (date === ws.date && (!startTime || startTime === ws.startTime)) throw new Error('That is the same date and time');
   const sendAt = new Date(Date.now() + (sendNow ? 0 : RESCHEDULE_DELAY_MIN() * 60_000)).toISOString();
@@ -190,6 +211,7 @@ app.get('/api/activity', (req, res) => {
 app.post('/api/workshops/:id/preview', wrap(async (req, res) => {
   const ws = findWs(req.params.id);
   const phase = req.body.phase || 'hype';
+  if (!['hype', 'tomorrow', 'dayof', 'reschedule'].includes(phase)) throw new Error('Unknown message type');
   let r;
   if (phase === 'reschedule') {
     const pr = ws.pendingReschedule || req.body;
@@ -208,10 +230,12 @@ app.post('/api/workshops/:id/test', wrap(async (req, res) => {
   const ws = findWs(req.params.id);
   if (!req.body.jid || !req.body.text) throw new Error('Pick a group and write a preview first');
   await sendText(ws.account, req.body.jid, req.body.text);
-  const group = ws.groups?.find((g) => g.jid === req.body.jid)?.name || req.body.jid;
+  const group = (Array.isArray(ws.groups) ? ws.groups : []).find((g) => g.jid === req.body.jid)?.name || req.body.jid;
   log('info', `${displayName(ws)}: preview sent by hand to ${group}`, { kind: 'sent', workshopId: ws.id, manualText: req.body.text });
   res.json({ ok: true });
 }));
+
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Bad JSON bodies etc.: short JSON error, never a stack trace
 app.use((err, req, res, next) => res.status(err.status || 500).json({ error: err.expose ? err.message : 'Something went wrong' }));
