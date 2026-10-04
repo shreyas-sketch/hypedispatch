@@ -55,6 +55,7 @@ export async function startAccount(id) {
       s.status = 'connected';
       s.qr = null;
       s.me = jidNormalizedUser(sock.user?.id);
+      s.meLid = sock.user?.lid ? jidNormalizedUser(sock.user.lid) : null; // v7: WhatsApp may list us by LID in groups
       log('info', `WhatsApp ${id} connected as ${s.me}`, { kind: 'system' });
     }
     if (u.connection === 'close') {
@@ -116,11 +117,12 @@ export async function listGroups(id) {
   }
   const s = live(id);
   const all = await s.sock.groupFetchAllParticipating();
-  const meNum = s.me?.split('@')[0];
+  // Our own ids: phone number and (Baileys 7) LID; participants may be listed by either
+  const mine = new Set([s.me, s.meLid, s.sock.user?.id, s.sock.user?.lid].filter(Boolean).map((j) => j.split('@')[0].split(':')[0]));
   return Object.values(all).map((g) => {
-    const me = g.participants?.find((p) => [p.id, p.jid, p.phoneNumber]
-      .filter(Boolean).some((j) => j.split('@')[0].split(':')[0] === meNum));
-    const isAdmin = !!me?.admin;
+    const me = g.participants?.find((p) => [p.id, p.jid, p.lid, p.phoneNumber]
+      .filter(Boolean).some((j) => mine.has(j.split('@')[0].split(':')[0])));
+    const isAdmin = !!(me?.admin || me?.isAdmin || me?.isSuperAdmin);
     return {
       jid: g.id,
       name: g.subject,
