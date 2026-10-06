@@ -111,31 +111,27 @@ Hard rules:
 - Every fact must come from the FACT SHEET. Do not invent numbers, results, testimonials, bonuses, scarcity, prices, names or claims. If unsure, leave it out.
 - Never write URLs or links.
 - Only use numbers that appear in the fact sheet.
-- 70 to 110 words in total, split into 6-9 SHORT paragraphs with a blank line between them. Each paragraph is ONE punchy line of 1-2 short sentences, never more than 20 words. Think WhatsApp, not email.
+- SHORT: 40 to 60 words in total (never more than 70). 4-6 short lines with a blank line between them. Each line is one punchy sentence of at most 15 words. People skim WhatsApp: every line must earn its place, cut anything that repeats an idea.
 - Goal: get as many people as possible to actually show up LIVE. Every message should build hype and a real fear of missing out.
 - Tone: HIGH energy. Urgent, bold, exciting and personal, like a host who is genuinely pumped. Short punchy sentences. Fragments are fine. Exclamation marks are fine. Talk to "you". No corporate or bland lines like "join us for an informative session". One or two words in caps for emphasis is fine, never whole sentences.
-- FOMO techniques to use (truthfully): paint the "after" picture of what attendees walk away with, contrast people who show up with people who hear about it later, make it feel like a moment you'd regret missing, end with a clear push to block the time and be there live.
+- FOMO (truthfully, ONE line of it is enough): the "after" picture of what they walk away with, or showing up live vs hearing about it later. End with a short push to block the time and be there live.
 - Scarcity, limited seats, "no replay", deadlines or bonuses only for live attendees: use them ONLY if the fact sheet says so (then lean into them hard). Never make them up.
-- Use 4-6 emojis that fit the content, spread through the message (e.g. at the start of the opening line and of a few paragraphs).
-- Formatting (WhatsApp style): bold with ONE asterisk on each side, *like this* (never **double**, no # headings, no markdown). Bold the important things: the workshop name, the date and time together (e.g. *Sunday, 4 October, 7 PM IST*), and the single biggest benefit. 2-4 bold parts in total, nothing else bold.
-- One idea per paragraph, blank line between paragraphs. If you list 2-3 things they'll get, put each on its own line starting with an emoji.
+- Use 3-5 emojis that fit the content (e.g. at the start of the hook and the bullet points).
+- Formatting (WhatsApp style): bold with ONE asterisk on each side, *like this* (never **double**, no # headings, no markdown). Bold the workshop name and the date and time together (e.g. *Sunday, 4 October, 7 PM IST*); optionally one key benefit. 2-3 bold parts in total, nothing else bold.
+- One idea per line. At most 2 bullet points of what they'll get, each on its own line starting with 👉 and under 10 words.
 - Do not sign off or add a name at the end: the team signature is added automatically.
 - Must be clearly different from the previous messages (different opening, angle and structure).
 - Output only the message text.
 
-SHAPE TO AIM FOR (the [brackets] are placeholders; fill them only with facts from the fact sheet, never copy this wording):
-🔥 [Scroll-stopping hook about the biggest benefit]
-
-You're in. Now let's make it count.
+SHAPE TO AIM FOR (about 50 words; the [brackets] are placeholders, fill them only with facts from the fact sheet, never copy this wording):
+🔥 [One-line hook about the biggest benefit]
 
 *[Workshop name]* goes live *[date, time]* ⏰
 
 👉 [specific thing they'll get]
 👉 [another specific thing]
 
-[One line on why showing up live matters]
-
-[Short, punchy push to block the time] 🙌`;
+[One short FOMO line + push to be there live] 🙌`;
 
 export async function draftMessage(ws, phase, previous = [], feedback = '') {
   const res = await ai().messages.create({
@@ -202,18 +198,18 @@ export function validate(msg, ws, phase) {
   if (!msg) return ['empty message'];
   if (/https?:\/\/|www\.|\.com\b|\.in\b|zoom\.us/i.test(msg)) issues.push('it contains a link');
   const words = msg.split(/\s+/).length;
-  if (words < 55) issues.push(`too short (${words} words, aim for 70-110)`);
-  if (words > 140) issues.push(`too long (${words} words, aim for 70-110)`);
+  if (words < 30) issues.push(`too short (${words} words, aim for 40-60)`);
+  if (words > 75) issues.push(`too long (${words} words): cut it to 40-60 words`);
   const emojis = (msg.match(/\p{Extended_Pictographic}/gu) || []).length;
   if (emojis < 2) issues.push('use 3-5 emojis');
-  if (emojis > 9) issues.push('too many emojis, use 4-6');
+  if (emojis > 7) issues.push('too many emojis, use 3-5');
   const longest = Math.max(...msg.split(/\n\s*\n/).map((p) => p.split(/\s+/).filter(Boolean).length));
-  if (longest > 30) issues.push(`a paragraph is ${longest} words, keep every paragraph to one short line (max 20 words)`);
+  if (longest > 22) issues.push(`a line is ${longest} words, keep every line under 15 words`);
   if (PRICE.test(msg)) issues.push('it mentions price or payment, never mention money');
   if (SELLING.test(msg)) issues.push('it asks them to register/sign up/buy, but they have already joined');
   const bold = (msg.match(/\*[^*\n]+\*/g) || []).length;
   if (bold < 2) issues.push('bold the workshop name and the date and time with single asterisks, *like this*');
-  if (bold > 6) issues.push('too much bold, keep it to 2-4 important parts');
+  if (bold > 5) issues.push('too much bold, keep it to 2-3 parts');
   if (phase === 'hype' && COUNTDOWN.test(msg)) issues.push('it reads like a countdown');
 
   const src = sourceText(ws);
@@ -237,27 +233,25 @@ export function validate(msg, ws, phase) {
 //   Zoom link: the day before and the workshop day
 export function linksFor(ws, phase) {
   const out = [];
-  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '🎁 *Unlock your surprise bonus:*', url: ws.formLink });
-  if ((phase === 'tomorrow' || phase === 'dayof') && ws.zoomLink) out.push({ kind: 'Zoom link', label: '🎥 *Zoom link:*', url: ws.zoomLink });
+  if (phase !== 'dayof' && ws.formLink) out.push({ kind: 'form', label: '🎁 *1-min form: help us tailor it for you + unlock your surprise bonus*', url: ws.formLink });
+  if ((phase === 'tomorrow' || phase === 'dayof') && ws.zoomLink) out.push({ kind: 'Zoom link', label: phase === 'dayof' ? '🎥 *Join here:*' : '🎥 *Zoom link (save it for tomorrow):*', url: ws.zoomLink });
   return out;
 }
 
 function linkBrief(ws, phase) {
   const kinds = linksFor(ws, phase).map((l) => l.kind);
-  if (!kinds.length) return 'Do not mention any form or link.';
+  // The links (with a bold label explaining them) are added under the message by code, so the message never mentions them.
+  // ABOUT THE FORM stays so Claude never calls it a registration form or guesses the bonus.
   const form = kinds.includes('form')
-    ? `\nABOUT THE FORM: it is NOT a registration form. It's a short form that helps us tailor the workshop to what each person wants, and everyone who fills it gets a surprise bonus. Make them curious and eager to fill it (tailored workshop + surprise bonus). Never say or guess what the bonus is.`
+    ? `\nThe bonus form (helps us tailor the workshop; filling it unlocks a surprise bonus) is NOT a registration form. Never call it one and never guess what the bonus is.`
     : '';
-  return `End with a short line saying the ${kinds.join(' and ')} ${kinds.length > 1 ? 'are' : 'is'} below (added automatically, do not write any link).${form}`;
+  return `Do not mention any form or link: they're added under your message automatically.${form}`;
 }
 
 function linkLine(ws, phase) {
   const kinds = linksFor(ws, phase).map((l) => l.kind);
   if (!kinds.length) return '';
-  const text = kinds.length > 1 ? '🎁 Fill in the short form below to unlock your *surprise bonus*, and save the Zoom link'
-    : kinds[0] === 'form' ? '🎁 Fill in the short form below so we can tailor the workshop to you, and unlock your *surprise bonus*'
-    : 'Zoom link below';
-  return `\n\n${text} 👇`;
+  return ''; // the bold label above each link explains it, no extra line needed
 }
 
 export function fallback(ws, phase) {
@@ -269,19 +263,18 @@ export function fallback(ws, phase) {
   // Only facts from the fact sheet, never anything made up
   const points = [...(f.what_youll_learn || []), ...(f.outcomes || [])].filter(Boolean).slice(0, 2);
   const list = points.length ? `\n\n${points.map((x) => `👉 ${x}`).join('\n')}` : '';
-  const forWho = f.who_its_for?.[0] ? `\n\n🙌 Made for: ${f.who_its_for[0]}` : '';
   const host = f.host ? ` with *${f.host}*` : '';
-  const what = points.length ? `\n\nHere's what's waiting for you:\n${points.map((x) => `👉 ${x}`).join('\n')}` : '';
+  // Short on purpose: ~30-50 words, the links and signature go underneath
   if (phase === 'tomorrow') {
-    return `⏰ *Tomorrow is the day!*\n\n*${title}*${host}\n📅 *${at}*\n\nYou're in. Now make sure you're actually there 🔥${what}\n\nSet a reminder right now. Seriously, do it now!${linkLine(ws, phase)}`;
+    return `⏰ *Tomorrow!* *${title}*${host} goes live *${at}*.${list}\n\nYou're in. Set a reminder now and be there live 🔥`;
   }
   if (phase === 'reschedule') {
-    return `📅 *New date alert!*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}.\n\nSorry for the shuffle 🙏 Your spot is safe and nothing else changes ✅${what}\n\nUpdate your calendar right now. This is still the one not to miss 🔥${linkLine(ws, phase)}`;
+    return `📅 *New date:* *${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}.\n\nSorry for the shuffle 🙏 Your spot is safe, nothing else changes.\n\nUpdate your calendar now. Still the one not to miss 🔥`;
   }
   if (phase === 'dayof') {
-    return `🚀 *It's TODAY!*\n\n*${title}*${host} goes live *today at ${when || 'the scheduled time'}*.\n\nThis is the moment you joined for 💪${what}\n\nGrab a notebook. Join on time. The first few minutes set the tone ⏰${linkLine(ws, phase)}`;
+    return `🚀 *It's TODAY!* *${title}*${host} goes live *today at ${when || 'the scheduled time'}*.${list}\n\nGrab a notebook and join on time ⏰`;
   }
-  return `🔥 *${title}* is coming, and you're already in!${host ? `\n\nLive${host}.` : ''}\n\n📅 *${at}*\nBlock it. Protect it. Show up.${what}${forWho}\n\nThe real magic happens live. Don't be the one catching up later ⚡${linkLine(ws, phase)}`;
+  return `🔥 *${title}* is coming, and you're in!\n\n📅 *${at}*${list}\n\nThe real magic happens live. Block it and show up ⚡`;
 }
 
 // Links are always added by code, never written by the AI

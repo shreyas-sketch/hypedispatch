@@ -19,7 +19,7 @@ assert.equal(phaseFor({ ...ws, dayOf: false }, '2026-10-04').phase, null);
 assert.deepEqual(nowParts(new Date('2026-09-30T20:00:00Z')), { date: '2026-10-01', hm: '01:30' });
 
 // Validator
-const good = '🤖 Imagine walking away with 3 AI automations you built yourself.\n\nNot watched. *Built.* By you, live, in one evening.\n\nThat is the whole point of *AI Income Workshop* 🔥\n\nReal builds. Zero fluff. A room full of people figuring it out with you.\n\n✨ Bring your laptop and that idea you have been sitting on.\n\nYou are in. Now show up!\n\n*Sunday, 7 PM IST*. See you there! 🚀';
+const good = '🤖 Walk away with 3 AI automations you built yourself.\n\n*AI Income Workshop* goes live *Sunday, 7 PM IST* ⏰\n\n👉 Real builds, zero fluff\n👉 Questions answered live\n\nYou are in. Now show up!\n\nThe people who show up live get the most out of it 🔥';
 assert.deepEqual(validate(good, ws, 'hype'), []);
 assert.ok(validate(good.replace('3 AI', '10 AI'), ws, 'hype').some((i) => i.includes('"10"')), 'invented number caught');
 assert.ok(validate('Only 3 days left!! ' + good, ws, 'hype').some((i) => i.includes('countdown')), 'countdown caught');
@@ -41,7 +41,8 @@ assert.equal(toWhatsApp('## Big news\n**AI Income Workshop** is on [our site](ht
 // Already-joined audience: no price, no "register", short paragraphs
 assert.ok(validate(good + ' All this for just ₹99!', ws, 'hype').some((i) => i.includes('price')), 'price caught');
 assert.ok(validate(good.replace('You are in. Now show up!', 'Register now and show up!'), ws, 'hype').some((i) => i.includes('register')), 'selling caught');
-assert.ok(validate(good.replace('\n\nReal builds.', ' Real builds.').replace('\n\nNot watched.', ' Not watched.').replace('\n\nThat is', ' That is'), ws, 'hype').some((i) => i.includes('paragraph')), 'long paragraph caught');
+assert.ok(validate(good.replace(/\n\n/g, ' '), ws, 'hype').some((i) => i.includes('line is')), 'long line caught');
+assert.ok(validate(good + '\n\n' + 'Bring your laptop and that idea. '.repeat(6), ws, 'hype').some((i) => i.includes('too long')), 'too long caught (> 75 words)');
 {
   const { withoutPrice } = await import('../src/workshop.js');
   const f = withoutPrice({ title: 'X', price_text: '₹99 only', other_key_facts: ['Just ₹99 today', '3 live case studies', 'Usual fee Rs 4999'], bonuses: ['Free templates'] });
@@ -87,8 +88,8 @@ assert.ok(withLinks('x', ws, 'reschedule').includes(ws.formLink) && !withLinks('
 assert.equal(withLinks('x', { ...ws, formLink: '' }, 'hype'), 'x', 'no form link set: nothing added');
 // Signature is always the very last thing, after the links
 const signed = withLinks('x', { ...ws, signature: '*Team Akshat Dani*\nakshatdani.com' }, 'tomorrow');
-assert.ok(signed.endsWith('🎥 *Zoom link:*\nhttps://zoom.us/j/123\n\n*Team Akshat Dani*\nakshatdani.com'), signed);
-assert.ok(signed.includes('🎁 *Unlock your surprise bonus:*\nhttps://forms.gle/abc'), signed);
+assert.ok(signed.endsWith('🎥 *Zoom link (save it for tomorrow):*\nhttps://zoom.us/j/123\n\n*Team Akshat Dani*\nakshatdani.com'), signed);
+assert.ok(signed.includes('🎁 *1-min form: help us tailor it for you + unlock your surprise bonus*\nhttps://forms.gle/abc'), signed);
 assert.ok(withLinks('x', { ...ws, signature: '*Team X*' }, 'dayof').endsWith('*Team X*'));
 assert.ok(withLinks('x', ws, 'dayof').includes(ws.zoomLink) && !withLinks('x', ws, 'dayof').includes(ws.formLink));
 
@@ -98,11 +99,14 @@ for (const p of ['hype', 'tomorrow', 'dayof']) {
   assert.ok(f.includes('AI Income Workshop'), p);
   assert.ok(!/https?:/.test(f), 'templates never contain links themselves');
 }
-assert.ok(fallback(ws, 'hype').includes('tailor the workshop to you, and unlock your *surprise bonus*'));
+assert.ok(withLinks(fallback(ws, 'hype'), ws, 'hype').includes('tailor it for you + unlock your surprise bonus'), 'form explained in its label');
 assert.ok(!/regist/i.test(fallback(ws, 'hype') + fallback(ws, 'tomorrow') + withLinks('x', ws, 'hype')), 'never called a registration form');
-assert.ok(fallback(ws, 'tomorrow').includes('unlock your *surprise bonus*, and save the Zoom link'));
-assert.ok(fallback(ws, 'dayof').includes('Zoom link below') && !fallback(ws, 'dayof').includes('orm'));
-assert.ok(!fallback({ ...ws, formLink: '' }, 'hype').includes('below'), 'no form link: no "below" line');
+assert.ok(!/form|link/i.test(fallback(ws, 'tomorrow') + fallback(ws, 'dayof')), 'message body never talks about links; the labels do');
+// every template stays short (body only, before links and signature)
+for (const p of ['hype', 'tomorrow', 'dayof', 'reschedule']) {
+  const n = fallback({ ...ws, factSheet: { ...ws.factSheet, host: 'Akshat Dani', old_date_text: 'Saturday, 3 October' } }, p).split(/\s+/).length;
+  assert.ok(n <= 60, `${p} template is short (${n} words)`);
+}
 
 // With a bad key / unreachable API, pipeline falls back instead of crashing (offline, so the test is fast)
 process.env.ANTHROPIC_API_KEY = 'sk-bad';

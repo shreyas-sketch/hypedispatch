@@ -97,8 +97,8 @@ To change the wait, set `RESCHEDULE_DELAY_MIN=5` in `.env` (or Railway Variables
 - Form and Zoom links are inserted by code, never written by AI.
 - Each programme has its own **signature** (e.g. `*Team Akshat Dani*` + `akshatdani.com`), added by code as the last lines of every message. Edit it under **Programmes → View**.
 - Everyone in these communities has **already joined** (paid). Messages never mention price or payment and never ask people to register or buy; their only job is to get people to **show up live**. Price facts are removed from what Claude sees, and a draft that mentions money or "register / sign up / buy" is rejected.
-- Messages are short punchy lines (no paragraph over ~20 words), written to build hype and FOMO so people show up live: a hook opening, what they'd miss, and a push to block the time. Scarcity ("limited seats", "no replay", deadlines) is only used if the landing page says it.
-- Messages aim for 70–110 words with 3–5 emojis, in short paragraphs. The workshop name, the date and time, and the biggest benefit are in *bold*, and the links sit under bold labels (🎁 *Unlock your surprise bonus:*, 🎥 *Zoom link:*). A draft that's too short or has no emojis is sent back to Claude to rewrite.
+- Messages are written to build hype and FOMO so people show up live: a hook opening, what they'd miss, and a push to block the time. Scarcity ("limited seats", "no replay", deadlines) is only used if the landing page says it.
+- Messages are short: about 40–60 words in 4–6 lines (a hook, the workshop name and date/time in *bold*, up to 2 👉 points, one push to show up live). Drafts over 75 words or with lines over ~20 words are sent back to be rewritten. The links go underneath with bold labels that explain them (🎁 *1-min form: help us tailor it for you + unlock your surprise bonus*, 🎥 *Zoom link*), then the signature.
 
 ## Good to know
 
