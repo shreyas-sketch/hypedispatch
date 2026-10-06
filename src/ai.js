@@ -111,27 +111,32 @@ Hard rules:
 - Every fact must come from the FACT SHEET. Do not invent numbers, results, testimonials, bonuses, scarcity, prices, names or claims. If unsure, leave it out.
 - Never write URLs or links.
 - Only use numbers that appear in the fact sheet.
-- SHORT: 40 to 60 words in total (never more than 70). 4-6 short lines with a blank line between them. Each line is one punchy sentence of at most 15 words. People skim WhatsApp: every line must earn its place, cut anything that repeats an idea.
+- LENGTH: 60 to 80 words in total (count them; never under 55 or over 85). 5-7 short lines with a blank line between them. Each line is one punchy sentence of at most 15 words. People skim WhatsApp: every line must earn its place, no line repeats an idea.
 - Goal: get as many people as possible to actually show up LIVE. Every message should build hype and a real fear of missing out.
 - Tone: HIGH energy. Urgent, bold, exciting and personal, like a host who is genuinely pumped. Short punchy sentences. Fragments are fine. Exclamation marks are fine. Talk to "you". No corporate or bland lines like "join us for an informative session". One or two words in caps for emphasis is fine, never whole sentences.
 - FOMO (truthfully, ONE line of it is enough): the "after" picture of what they walk away with, or showing up live vs hearing about it later. End with a short push to block the time and be there live.
 - Scarcity, limited seats, "no replay", deadlines or bonuses only for live attendees: use them ONLY if the fact sheet says so (then lean into them hard). Never make them up.
 - Use 3-5 emojis that fit the content (e.g. at the start of the hook and the bullet points).
 - Formatting (WhatsApp style): bold with ONE asterisk on each side, *like this* (never **double**, no # headings, no markdown). Bold the workshop name and the date and time together (e.g. *Sunday, 4 October, 7 PM IST*); optionally one key benefit. 2-3 bold parts in total, nothing else bold.
-- One idea per line. At most 2 bullet points of what they'll get, each on its own line starting with 👉 and under 10 words.
+- One idea per line. 2-3 bullet points of what they'll get, each on its own line starting with 👉 and under 12 words.
 - Do not sign off or add a name at the end: the team signature is added automatically.
 - Must be clearly different from the previous messages (different opening, angle and structure).
 - Output only the message text.
 
-SHAPE TO AIM FOR (about 50 words; the [brackets] are placeholders, fill them only with facts from the fact sheet, never copy this wording):
+SHAPE TO AIM FOR (about 70 words; the [brackets] are placeholders, fill them only with facts from the fact sheet, never copy this wording):
 🔥 [One-line hook about the biggest benefit]
+
+[One line that makes the hook concrete: the before → after]
 
 *[Workshop name]* goes live *[date, time]* ⏰
 
 👉 [specific thing they'll get]
 👉 [another specific thing]
+👉 [a third, if the fact sheet has one]
 
-[One short FOMO line + push to be there live] 🙌`;
+[One short FOMO line: showing up live vs hearing about it later]
+
+[Short push to block the time and be there live] 🙌`;
 
 export async function draftMessage(ws, phase, previous = [], feedback = '') {
   const res = await ai().messages.create({
@@ -198,8 +203,8 @@ export function validate(msg, ws, phase) {
   if (!msg) return ['empty message'];
   if (/https?:\/\/|www\.|\.com\b|\.in\b|zoom\.us/i.test(msg)) issues.push('it contains a link');
   const words = msg.split(/\s+/).length;
-  if (words < 30) issues.push(`too short (${words} words, aim for 40-60)`);
-  if (words > 75) issues.push(`too long (${words} words): cut it to 40-60 words`);
+  if (words < 55) issues.push(`too short (${words} words): write 60-80 words`);
+  if (words > 85) issues.push(`too long (${words} words): cut it to 60-80 words`);
   const emojis = (msg.match(/\p{Extended_Pictographic}/gu) || []).length;
   if (emojis < 2) issues.push('use 3-5 emojis');
   if (emojis > 7) issues.push('too many emojis, use 3-5');
@@ -261,20 +266,23 @@ export function fallback(ws, phase) {
   const day = f.date_text || prettyDate(ws.date);
   const at = `${day}${when ? `, ${when}` : ''}`;
   // Only facts from the fact sheet, never anything made up
-  const points = [...(f.what_youll_learn || []), ...(f.outcomes || [])].filter(Boolean).slice(0, 2);
+  // up to 2 bullet points, keeping them to ~16 words together so the message stays within 60-80 words
+  const words = (x) => String(x).split(/\s+/).length;
+  const points = [...(f.what_youll_learn || []), ...(f.outcomes || [])].filter(Boolean)
+    .reduce((acc, x) => (acc.length < 2 && (acc.length === 0 || words(acc[0]) + words(x) <= 16) ? [...acc, x] : acc), []);
   const list = points.length ? `\n\n${points.map((x) => `👉 ${x}`).join('\n')}` : '';
   const host = f.host ? ` with *${f.host}*` : '';
-  // Short on purpose: ~30-50 words, the links and signature go underneath
+  // ~60-80 words like the AI messages (links and signature go underneath). Only fact-sheet facts; the rest is general.
   if (phase === 'tomorrow') {
-    return `⏰ *Tomorrow!* *${title}*${host} goes live *${at}*.${list}\n\nYou're in. Set a reminder now and be there live 🔥`;
+    return `⏰ *Tomorrow is the day!*\n\n*${title}*${host} goes live *${at}*.${list}\n\nYou're in. Now be there live from the very first minute.\n\nThe people who show up live get the most out of it. Don't be the one catching up later 🔥\n\nSet a reminder right now and keep the time free 🙌`;
   }
   if (phase === 'reschedule') {
-    return `📅 *New date:* *${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}.\n\nSorry for the shuffle 🙏 Your spot is safe, nothing else changes.\n\nUpdate your calendar now. Still the one not to miss 🔥`;
+    return `📅 *New date alert!*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}.\n\nSorry for the shuffle 🙏 Your spot is safe and nothing else changes.${list}\n\nUpdate your calendar right now so you don't miss it.\n\nSame energy, same content, just a new slot. This is still the one not to miss 🔥`;
   }
   if (phase === 'dayof') {
-    return `🚀 *It's TODAY!* *${title}*${host} goes live *today at ${when || 'the scheduled time'}*.${list}\n\nGrab a notebook and join on time ⏰`;
+    return `🚀 *It's TODAY!*\n\n*${title}*${host} goes live *today at ${when || 'the scheduled time'}*.\n\nThis is the moment you joined for 💪${list}\n\nGrab a notebook, find a quiet spot and join a few minutes early.\n\nBring your questions. The first few minutes set the tone, so be there right from the start ⏰`;
   }
-  return `🔥 *${title}* is coming, and you're in!\n\n📅 *${at}*${list}\n\nThe real magic happens live. Block it and show up ⚡`;
+  return `🔥 *${title}* is coming, and you're in!\n\n📅 *${at}*${list}\n\nThis is your chance to learn it live, ask your questions and leave with a clear next step.\n\nThe people who show up live get the most out of it. Don't be the one catching up later ⚡\n\nBlock the time right now 🙌`;
 }
 
 // Links are always added by code, never written by the AI

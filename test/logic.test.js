@@ -19,7 +19,7 @@ assert.equal(phaseFor({ ...ws, dayOf: false }, '2026-10-04').phase, null);
 assert.deepEqual(nowParts(new Date('2026-09-30T20:00:00Z')), { date: '2026-10-01', hm: '01:30' });
 
 // Validator
-const good = '🤖 Walk away with 3 AI automations you built yourself.\n\n*AI Income Workshop* goes live *Sunday, 7 PM IST* ⏰\n\n👉 Real builds, zero fluff\n👉 Questions answered live\n\nYou are in. Now show up!\n\nThe people who show up live get the most out of it 🔥';
+const good = '🤖 Walk away with 3 AI automations you built yourself.\n\nNot watched on a screen. Built by you, live, in one evening.\n\n*AI Income Workshop* goes live *Sunday, 7 PM IST* ⏰\n\n👉 Real builds, zero fluff\n👉 Questions answered live\n👉 A clear next step for the week\n\nYou are in. Now show up!\n\nThe people who show up live get the most out of it 🔥';
 assert.deepEqual(validate(good, ws, 'hype'), []);
 assert.ok(validate(good.replace('3 AI', '10 AI'), ws, 'hype').some((i) => i.includes('"10"')), 'invented number caught');
 assert.ok(validate('Only 3 days left!! ' + good, ws, 'hype').some((i) => i.includes('countdown')), 'countdown caught');
@@ -105,7 +105,7 @@ assert.ok(!/form|link/i.test(fallback(ws, 'tomorrow') + fallback(ws, 'dayof')), 
 // every template stays short (body only, before links and signature)
 for (const p of ['hype', 'tomorrow', 'dayof', 'reschedule']) {
   const n = fallback({ ...ws, factSheet: { ...ws.factSheet, host: 'Akshat Dani', old_date_text: 'Saturday, 3 October' } }, p).split(/\s+/).length;
-  assert.ok(n <= 60, `${p} template is short (${n} words)`);
+  assert.ok(n >= 50 && n <= 80, `${p} template is 60-80 words or close (${n})`);
 }
 
 // With a bad key / unreachable API, pipeline falls back instead of crashing (offline, so the test is fast)
