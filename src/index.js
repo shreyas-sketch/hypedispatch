@@ -100,14 +100,14 @@ app.get('/api/accounts/:id/groups', wrap(async (req, res) => res.json(await list
 
 // ----- programmes (one per landing page) -----
 app.post('/api/programmes', wrap((req, res) => {
-  const p = { id: newId(), name: req.body.name || 'New programme', landingUrl: req.body.landingUrl || '', focus: req.body.focus || '', signature: req.body.signature || '', factSheet: null };
+  const p = { id: newId(), name: req.body.name || 'New programme', landingUrl: req.body.landingUrl || '', focus: req.body.focus || '', title: req.body.title || '', host: req.body.host || '', signature: req.body.signature || '', factSheet: null };
   db().programmes.push(p); save(); res.json(p);
 }));
 app.put('/api/programmes/:id', wrap((req, res) => {
   const p = findProg(req.params.id);
   if ('factSheet' in req.body && req.body.factSheet !== null && (typeof req.body.factSheet !== 'object' || Array.isArray(req.body.factSheet))) throw new Error('The fact sheet must be JSON like { "title": "…" }');
-  for (const k of ['name', 'landingUrl', 'focus', 'signature']) if (k in req.body && typeof req.body[k] !== 'string') throw new Error(`${k} must be text`);
-  for (const k of ['name', 'landingUrl', 'focus', 'signature', 'factSheet']) if (k in req.body) p[k] = req.body[k];
+  for (const k of ['name', 'title', 'host', 'landingUrl', 'focus', 'signature']) if (k in req.body && typeof req.body[k] !== 'string') throw new Error(`${k} must be text`);
+  for (const k of ['name', 'title', 'host', 'landingUrl', 'focus', 'signature', 'factSheet']) if (k in req.body) p[k] = req.body[k];
   save(); res.json({ ...p, pageText: undefined });
 }));
 app.delete('/api/programmes/:id', wrap((req, res) => {

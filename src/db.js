@@ -35,6 +35,8 @@ export function db() {
   for (const p of SEED_PROGRAMMES) {
     const prog = cache.programmes.find((x) => x.name === p.name);
     if (prog && prog.signature === undefined) prog.signature = p.signature;
+    // official workshop name + host (once; your own edits are kept)
+    if (prog && prog.title === undefined) { prog.title = p.title; prog.host = p.host; }
   }
   return cache;
 }

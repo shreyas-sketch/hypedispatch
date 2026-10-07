@@ -26,8 +26,12 @@ export function timeLabelOf(ws) {
 export function resolve(ws, old = null) {
   const prog = programmeOf(ws);
   if (!prog?.factSheet) return null;
+  const facts = withoutPrice(prog.factSheet);
   const factSheet = {
-    ...withoutPrice(prog.factSheet),
+    ...facts,
+    // The official name and host (set per programme) always win over what was read off the landing page
+    title: prog.title?.trim() || facts.title,
+    host: prog.host?.trim() || facts.host,
     date_text: prettyDate(ws.date),
     time_text: timeLabelOf(ws),
   };

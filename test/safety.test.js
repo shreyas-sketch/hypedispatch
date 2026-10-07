@@ -127,5 +127,22 @@ assert.equal(reloaded.db().programmes.find((p) => p.name === 'Deepak Crypto' || 
   assert.equal(syncWorkshopGroups('accC', list).wrongKind.length, 1);
 }
 
+// Official workshop name + host: pre-filled once for existing data, and they override the fact sheet in messages
+{
+  const fresh = await import('../src/db.js?names');
+  const progs = fresh.db().programmes;
+  const sid = progs.find((p) => p.name === 'Siddharth Ecom');
+  assert.equal(sid.title, 'Launch Method Workshop'); assert.equal(sid.host, 'Siddharth Kapoor');
+  assert.equal(progs.find((p) => p.name === 'BO Chirag').host, 'Chirag Jhumkhawala');
+  const { resolve } = await import('../src/workshop.js');
+  const p = d.programmes.find((x) => x.name === 'Aarzoo Leadership');
+  p.factSheet = { title: 'The Leadership Blueprint Masterclass (old name)', host: 'Aarzoo' };
+  p.title = 'Leadership Code Masterclass'; p.host = 'Aarzoo Shah';
+  const r = resolve({ id: 'x', programmeId: p.id, date: '2026-10-20', groups: [] });
+  assert.equal(r.factSheet.title, 'Leadership Code Masterclass'); assert.equal(r.factSheet.host, 'Aarzoo Shah');
+  p.title = ''; p.host = '';
+  assert.equal(resolve({ id: 'x', programmeId: p.id, date: '2026-10-20', groups: [] }).factSheet.title, 'The Leadership Blueprint Masterclass (old name)', 'blank = use the landing page name');
+}
+
 console.log('Safety tests passed ✓');
 process.exit(0);

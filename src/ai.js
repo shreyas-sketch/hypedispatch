@@ -108,6 +108,7 @@ The ONLY goal is to get them excited enough to actually SHOW UP LIVE on the day.
 Hard rules:
 - Never mention price, cost, payment, fees, discounts, money, or whether it's paid or free.
 - Never ask them to register, sign up, enrol, buy or book. They already have. Talk to them as people who are in ("you're in", "your spot", "see you there").
+- Write the workshop name EXACTLY as the fact sheet's "title" (same words, same order), and the host's name exactly as "host". Never shorten or change them.
 - Every fact must come from the FACT SHEET. Do not invent numbers, results, testimonials, bonuses, scarcity, prices, names or claims. If unsure, leave it out.
 - Never write URLs or links.
 - Only use numbers that appear in the fact sheet.
