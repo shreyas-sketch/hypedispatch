@@ -1,7 +1,11 @@
 // Checks every minute:
 //  1. Reschedules: announced 5 minutes after you save them (so you can still cancel), or right away with "Announce now"
 //  2. Daily messages: hype / tomorrow / day-of, sent once per day at each workshop's send time
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { db, save, log } from './db.js';
+import { dataDir } from './paths.js';
 import { nowParts, phaseFor, sendTimeFor, addDays } from './time.js';
 import { composeMessage, withLinks, linksFor } from './ai.js';
 import { sendText, sleep, isConnected, onSendRejected, describeRejection } from './wa.js';
@@ -21,13 +25,34 @@ const RETRY_EVERY_MIN = 5;
 const MAX_ROUNDS = 12; // about an hour of retries
 const notYet = (rec, now) => rec?.nextTryAt && now.getTime() < Date.parse(rec.nextTryAt);
 
+// Only one copy of Hype Dispatch may send from the same data at a time (e.g. while a Railway redeploy overlaps)
+const INSTANCE = `${os.hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
+const LOCK_STALE_MS = 90_000;
+const lockFile = () => path.join(dataDir(), 'scheduler.lock');
+function readLock() { try { return JSON.parse(fs.readFileSync(lockFile(), 'utf8')); } catch { return null; } }
+export function holdSchedulerLock() {
+  const l = readLock();
+  if (l && l.id !== INSTANCE && Date.now() - l.beat < LOCK_STALE_MS) return false;
+  fs.mkdirSync(dataDir(), { recursive: true });
+  fs.writeFileSync(lockFile(), JSON.stringify({ id: INSTANCE, beat: Date.now() }));
+  return true;
+}
+function lockedTick() {
+  if (!holdSchedulerLock()) {
+    warnOnce(`lock|${nowParts().date}|${nowParts().hm.slice(0, 2)}`, 'warn', 'Another copy of Hype Dispatch is running on the same data, so this copy is not sending (it takes over if the other stops for 90 seconds).', { kind: 'system' });
+    return Promise.resolve();
+  }
+  return tick();
+}
+
 export function startScheduler() {
   // Sends left unfinished by an older version: stop them rather than risk a duplicate of a manual resend
   let changed = false;
   for (const s of db().sends) if (!s.done && !s.retryVersion) { s.done = true; s.note = 'stopped when Hype Dispatch was updated'; changed = true; }
   if (changed) save();
-  setInterval(() => tick().catch((e) => log('error', `Scheduler: ${e.message}`)), 60_000);
-  setTimeout(() => tick().catch(() => {}), 15_000); // catch up shortly after boot
+  setInterval(() => lockedTick().catch((e) => log('error', `Scheduler: ${e.message}`)), 60_000);
+  setInterval(() => { if (readLock()?.id === INSTANCE) holdSchedulerLock(); }, 20_000); // heartbeat
+  setTimeout(() => lockedTick().catch(() => {}), 15_000); // catch up shortly after boot
 }
 
 function warnOnce(key, level, msg, extra = {}) {
@@ -47,12 +72,16 @@ onSendRejected((accountId, msgId, jid, code) => {
     log('warn', `WhatsApp refused a message to ${jid}. ${describeRejection(code).text}`, { kind: 'notsent' });
     return;
   }
+  // WhatsApp accepted this message, then sent an error notice. That notice can mean a single member's device
+  // couldn't show it while everyone else got it, so we NEVER resend automatically (that caused duplicates).
+  // A clear refusal (not allowed to post etc.) is shown as not sent; anything else as a warning to check.
   const r = rec.results[jid];
   const why = describeRejection(code);
-  rec.results[jid] = { ...r, ok: false, permanent: why.permanent, error: why.text };
-  if (!why.permanent && (rec.rounds || 0) < MAX_ROUNDS) { rec.done = false; rec.nextTryAt = new Date(Date.now() + RETRY_EVERY_MIN * 60_000).toISOString(); }
+  if (why.permanent) rec.results[jid] = { ...r, ok: false, permanent: true, error: why.text };
+  else rec.results[jid] = { ...r, warning: `WhatsApp reported error ${code || 'unknown'} for this message; it may not have reached everyone` };
   save();
-  log(why.permanent ? 'error' : 'warn', `${rec.workshop}: ${PHASE_NAME[rec.phase]} did NOT reach ${r.name}. ${why.text}`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
+  if (why.permanent) log('error', `${rec.workshop}: ${PHASE_NAME[rec.phase]} did NOT reach ${r.name}. ${why.text}`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
+  else warnOnce(`${rec.key}|${jid}|ackerr`, 'warn', `${rec.workshop}: WhatsApp reported a delivery problem (error ${code || 'unknown'}) for the ${PHASE_NAME[rec.phase]} in ${r.name}. It usually still reached the group; it will NOT be resent automatically. Check the group if in doubt.`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
 });
 
 function launch(key, fn, label) {
@@ -245,21 +274,32 @@ export async function deliver(ws, rec, now = new Date()) {
   }
   delete rec.waiting;
   for (const g of ws.groups || []) {
-    if (rec.results[g.jid]?.ok || rec.results[g.jid]?.permanent) continue; // done, or WhatsApp will never accept it
+    const prev = rec.results[g.jid];
+    if (prev?.ok || prev?.permanent || prev?.uncertain) continue; // done, never accepted, or might already be there
+    // Never send the same kind of message to a group twice in one day, whichever workshop it comes from
+    const already = db().sends.find((s) => s !== rec && s.date === rec.date && s.phase === rec.phase && s.results?.[g.jid]?.ok);
+    if (already) {
+      rec.results[g.jid] = { ok: true, skipped: true, name: g.name, note: `already got today's ${PHASE_NAME[rec.phase]} from ${already.workshop}` };
+      log('warn', `${rec.workshop}: skipped ${g.name}, it already got today's ${PHASE_NAME[rec.phase]} from ${already.workshop} (two workshops send to this group?)`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
+      save();
+      continue;
+    }
     try {
       const msgId = await sendText(ws.account, g.jid, rec.text);
       rec.results[g.jid] = { ok: true, name: g.name, at: new Date().toISOString(), msgId };
     } catch (e) {
       const code = e.output?.statusCode || e.data?.attrs?.code || e.message;
       const why = /^(401|403|404|406|forbidden|not-authorized|item-not-found|not-acceptable)$/.test(String(code)) ? describeRejection(code) : null;
-      rec.results[g.jid] = { ok: false, name: g.name, error: why ? why.text : e.message, permanent: !!why?.permanent };
+      // A timeout means we don't know if it went out: don't risk a duplicate, flag it instead
+      const uncertain = /timed out/i.test(e.message);
+      rec.results[g.jid] = { ok: false, name: g.name, error: why ? why.text : uncertain ? 'Sending took too long; it may or may not have gone out. Not resent, to avoid a duplicate. Check the group.' : e.message, permanent: !!why?.permanent, uncertain };
     }
     save();
     await sleep(GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN));
   }
   const current = new Set((ws.groups || []).map((g) => g.jid));
   const failed = Object.entries(rec.results).filter(([jid, r]) => !r.ok && current.has(jid)).map(([, r]) => r);
-  const retryable = failed.filter((r) => !r.permanent);
+  const retryable = failed.filter((r) => !r.permanent && !r.uncertain);
   rec.rounds = (rec.rounds || 0) + 1;
   rec.done = retryable.length === 0 || rec.rounds >= MAX_ROUNDS;
   rec.nextTryAt = rec.done ? null : new Date(now.getTime() + RETRY_EVERY_MIN * 60_000).toISOString();

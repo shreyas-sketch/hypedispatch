@@ -71,5 +71,14 @@ assert.equal(msgId, 'MSG1');
 sockets[3].emit('messages.update', [{ key: { id: 'MSG1', fromMe: true, remoteJid: 'g@g.us' }, update: { status: real.WAMessageStatus.ERROR, messageStubParameters: ['403'] } }]);
 assert.deepEqual(got, [['acc2', 'MSG1', 'g@g.us', '403']]);
 
+// 6. Another device on this number sends one of our messages (app running twice): flagged; our own sends are not
+const { db } = await import('../src/db.js');
+const ours = { key: { id: 'MSG1', fromMe: true, remoteJid: 'g@g.us' }, message: { conversation: '🎁 *1-min form: help us tailor it for you + unlock your surprise bonus*' } };
+sockets[3].emit('messages.upsert', { type: 'append', messages: [ours] });
+sockets[3].emit('messages.upsert', { type: 'notify', messages: [ours] }); // MSG1 is in our sent store
+assert.ok(!db().log?.some((l) => l.msg.includes('somewhere else')), 'our own sends are never flagged');
+sockets[3].emit('messages.upsert', { type: 'notify', messages: [{ ...ours, key: { ...ours.key, id: 'OTHER' } }] });
+assert.ok(db().log.some((l) => l.msg.includes('probably also running somewhere else')), 'a copy running elsewhere is flagged');
+
 console.log('WhatsApp connection tests passed ✓');
 process.exit(0);

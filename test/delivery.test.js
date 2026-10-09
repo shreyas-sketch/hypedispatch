@@ -116,16 +116,15 @@ reportRejected('a1', r8().results['t8@g.us'].msgId, 't8@g.us', '479');   // temp
 assert.equal(r8().results['p8@g.us'].ok, false);
 assert.ok(r8().results['p8@g.us'].error.includes("isn't allowed to post"));
 assert.ok(d.log.some((l) => l.msg.includes('did NOT reach Perm8')), 'refusal shows in the activity log');
-assert.ok(!r8().done, 'temporary error re-opens the send for a retry');
-assert.ok(Date.parse(r8().nextTryAt) - Date.now() > 4 * 60_000, 'retry scheduled ~5 minutes out');
-r8().nextTryAt = new Date('2026-10-12T11:05:00+05:30').toISOString(); // line the retry up with this test's simulated clock
+assert.ok(r8().results['t8@g.us'].ok, 'a non-refusal error notice does NOT mark it failed (it usually still arrived)');
+// THE duplicate bug: error notices must never cause a resend. Simulate a whole day of them.
 const sentBefore = dryRunSent.length;
-await tick(new Date('2026-10-12T11:01:00+05:30')); await wait();
-assert.equal(dryRunSent.length, sentBefore, 'waits 5 minutes before retrying');
-await tick(new Date('2026-10-12T11:06:00+05:30')); await wait();
-const retried = dryRunSent.slice(sentBefore).map((m) => m.jid);
-assert.deepEqual(retried, ['t8@g.us'], 'only the temporary failure is retried, never the refused group');
-assert.ok(r8().done);
+for (let h = 11; h <= 22; h++) {
+  reportRejected('a1', r8().results['t8@g.us'].msgId, 't8@g.us', '479');
+  await tick(new Date(`2026-10-12T${String(h).padStart(2, '0')}:05:00+05:30`)); await wait();
+}
+assert.equal(dryRunSent.length, sentBefore, 'nothing is ever resent after WhatsApp accepted it');
+assert.equal(d.log.filter((l) => l.msg.includes('delivery problem (error 479)')).length, 1, 'the warning is logged once');
 
 // 9. A refusal at send time (e.g. "forbidden") is not retried for an hour
 d.workshops.push({ id: 'w9', programmeId: prog.id, date: '2026-10-20', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
@@ -135,6 +134,44 @@ await tick(new Date('2026-10-13T11:00:00+05:30')); await wait();
 const r9 = d.sends.find((s) => s.key === 'w9|2026-10-13|hype');
 assert.ok(r9.done && r9.rounds === 1, 'given up straight away');
 assert.ok(d.log.some((l) => l.msg.includes('NOT sent to Forbidden9') && l.msg.includes('not an admin')));
+
+// 10. Two workshops pointing at the same group on the same day: the group gets ONE message of each type
+dryRunErrors.clear(); dryRunSent.length = 0;
+for (const id of ['w10a', 'w10b']) d.workshops.push({ id, programmeId: prog.id, date: '2026-10-25', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+  groups: [{ jid: 'same@g.us', name: 'Same group' }], firstSendDate: '2026-09-01' });
+await tick(new Date('2026-10-14T11:00:00+05:30')); await wait(); await wait();
+assert.equal(dryRunSent.filter((m) => m.jid === 'same@g.us').length, 1, 'one hype per group per day, even with two workshops');
+assert.ok(d.log.some((l) => l.msg.includes('skipped Same group')));
+
+// 11. A send that timed out might have gone out: it's flagged, never resent
+d.workshops.push({ id: 'w11', programmeId: prog.id, date: '2026-10-25', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+  groups: [{ jid: 'slow@g.us', name: 'Slow' }], firstSendDate: '2026-09-01' });
+dryRunErrors.set('slow@g.us', 'Sending timed out after 60s');
+await tick(new Date('2026-10-15T11:00:00+05:30')); await wait();
+dryRunErrors.clear();
+for (const t of ['11:10', '12:00', '15:00']) { await tick(new Date(`2026-10-15T${t}:00+05:30`)); await wait(); }
+const r11 = d.sends.find((s) => s.key === 'w11|2026-10-15|hype');
+assert.ok(r11.done && r11.results['slow@g.us'].uncertain, 'timed-out send is flagged and finished');
+assert.equal(dryRunSent.filter((m) => m.jid === 'slow@g.us').length, 0, 'never resent after a timeout');
+
+// 12. Only one copy of the app can send from the same data
+{
+  const { holdSchedulerLock } = await import('../src/scheduler.js');
+  assert.ok(holdSchedulerLock(), 'first copy gets the lock');
+  const fsMod = await import('fs'); const pathMod = await import('path');
+  const lf = pathMod.join(process.cwd(), 'data', 'scheduler.lock');
+  fsMod.writeFileSync(lf, JSON.stringify({ id: 'other-copy', beat: Date.now() }));
+  assert.ok(!holdSchedulerLock(), 'a second copy is blocked while the first is alive');
+  fsMod.writeFileSync(lf, JSON.stringify({ id: 'other-copy', beat: Date.now() - 120_000 }));
+  assert.ok(holdSchedulerLock(), 'takes over once the other copy has stopped');
+}
+
+// 13. Another device on the same number sending our messages is flagged
+{
+  const { reportForeign } = await import('../src/wa.js');
+  reportForeign('a1', 'x@g.us'); reportForeign('a1', 'y@g.us');
+  assert.equal(d.log.filter((l) => l.msg.includes('probably also running somewhere else')).length, 1, 'flagged once a day');
+}
 
 console.log('Delivery tests passed ✓');
 fake.close();

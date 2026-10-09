@@ -19,6 +19,15 @@ const rejectedHandlers = [];
 export const onSendRejected = (fn) => rejectedHandlers.push(fn);
 export function reportRejected(accountId, msgId, jid, code) { for (const fn of rejectedHandlers) fn(accountId, msgId, jid, String(code || '')); }
 
+// Another device on the same number just sent a Hype Dispatch message we didn't send: two copies are running
+const foreignSeen = new Set();
+export function reportForeign(accountId, jid) {
+  const key = `${accountId}|${new Date().toISOString().slice(0, 10)}`;
+  if (foreignSeen.has(key)) return;
+  foreignSeen.add(key);
+  log('error', `Another device on WhatsApp ${accountId} just sent a Hype Dispatch message to ${jid} that THIS copy didn't send. Hype Dispatch is probably also running somewhere else (e.g. your laptop), so groups get every message twice. Stop the other copy.`, { kind: 'system' });
+}
+
 // Plain-English reason for a WhatsApp error code, and whether retrying could help
 export function describeRejection(code) {
   const c = String(code || '');
@@ -62,6 +71,14 @@ export async function startAccount(id) {
   const s = { sock, status: 'connecting', qr: null, me: null };
   sessions.set(id, s);
   sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('messages.upsert', ({ messages, type }) => {
+    if (type !== 'notify') return; // our own sends arrive as 'append'
+    for (const m of messages || []) {
+      if (!m.key?.fromMe || !m.key.remoteJid?.endsWith('@g.us') || findSent(id, m.key.id)) continue;
+      const t = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
+      if (/1-min form: help us tailor it|Unlock your surprise bonus|Zoom link \(save it for tomorrow\)/.test(t)) reportForeign(id, m.key.remoteJid);
+    }
+  });
   sock.ev.on('messages.update', (updates) => {
     for (const u of updates) {
       if (u.key?.fromMe && u.update?.status === WAMessageStatus.ERROR) reportRejected(id, u.key.id, u.key.remoteJid, u.update.messageStubParameters?.[0]);

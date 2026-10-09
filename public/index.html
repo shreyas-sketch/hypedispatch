@@ -724,7 +724,7 @@ function renderActivity() {
     const track = `ontoggle="this.open ? openEv.add('${id}') : openEv.delete('${id}')"`;
     const detail = rec ? `<details${open} ${track}><summary>Show message${results.length ? ` and ${results.length} group${results.length > 1 ? 's' : ''}` : ''}</summary>
         <div class="preview" style="margin-top:6px">${waFormat(rec.text)}</div>
-        ${results.length ? `<div class="groupres">${results.map((r) => `<div>${r.ok ? '✅' : '❌'} ${esc(r.name)}${r.at ? ` · ${istTime(r.at)}` : ''}${r.error ? ` · <span style="color:var(--bad)">${esc(r.error)}</span>` : ''}</div>`).join('')}</div>` : ''}
+        ${results.length ? `<div class="groupres">${results.map((r) => `<div>${r.skipped ? '⏭️' : r.ok ? (r.warning ? '⚠️' : '✅') : r.uncertain ? '❔' : '❌'} ${esc(r.name)}${r.at ? ` · ${istTime(r.at)}` : ''}${r.note ? ` · <span class="muted">${esc(r.note)}</span>` : ''}${r.warning ? ` · <span style="color:var(--warn)">${esc(r.warning)}</span>` : ''}${r.error ? ` · <span style="color:var(--bad)">${esc(r.error)}</span>` : ''}</div>`).join('')}</div>` : ''}
         <div class="small muted" style="margin-top:4px">${rec.source === 'ai' ? 'Written by Claude' : 'Safe template'}${rec.rounds > 1 ? ` · ${rec.rounds} tries` : ''}</div></details>`
       : l.manualText ? `<details${open} ${track}><summary>Show message</summary><div class="preview" style="margin-top:6px">${waFormat(l.manualText)}</div></details>` : '';
     html += `<div class="ev ${l.kind || ''}"><div class="tm">${istTime(l.at)}</div><div class="ic">${l.kind === 'notsent' && l.level === 'info' ? '⏸️' : KIND_ICON[l.kind] || (l.level === 'error' ? '⛔' : '•')}</div><div class="body"><div>${esc(l.msg)}</div>${detail}</div></div>`;
