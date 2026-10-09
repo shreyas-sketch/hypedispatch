@@ -25,7 +25,7 @@ export function reportForeign(accountId, jid) {
   const key = `${accountId}|${new Date().toISOString().slice(0, 10)}`;
   if (foreignSeen.has(key)) return;
   foreignSeen.add(key);
-  log('error', `Another device on WhatsApp ${accountId} just sent a Hype Dispatch message to ${jid} that THIS copy didn't send. Hype Dispatch is probably also running somewhere else (e.g. your laptop), so groups get every message twice. Stop the other copy.`, { kind: 'system' });
+  log('error', `Another device on WhatsApp ${accountId} just sent a Hype Dispatch message to ${jid} that THIS copy didn't send. If you didn't send it by hand from your phone, Hype Dispatch is probably also running somewhere else (e.g. your laptop), so groups get every message twice. Stop the other copy.`, { kind: 'system' });
 }
 
 // Plain-English reason for a WhatsApp error code, and whether retrying could help
@@ -199,6 +199,7 @@ export const dryRunSent = [];
 export const dryRunOffline = new Set();
 export const dryRunFailing = new Set();
 export const dryRunErrors = new Map(); // jid -> error message to throw (e.g. 'forbidden')
+export const dryRunOpts = { delayMs: 0 }; // how long a test send takes
 
 export function isConnected(id) {
   if (process.env.HYPE_DRY_RUN) return !dryRunOffline.has(id);
@@ -213,13 +214,17 @@ export async function sendText(id, jid, text) {
     if (dryRunOffline.has(id)) throw new Error(`WhatsApp account "${id}" is not connected`);
     if (dryRunFailing.has(jid)) throw new Error('send failed (test)');
     if (dryRunErrors.has(jid)) throw new Error(dryRunErrors.get(jid));
+    if (dryRunOpts.delayMs) await sleep(dryRunOpts.delayMs);
     dryRunSent.push({ id, jid, text });
     return `dry-${dryRunSent.length}`;
   }
   const s = live(id);
   // A half-dropped connection can make a send hang forever; give up and retry later instead
-  const sent = await withTimeout(s.sock.sendMessage(jid, { text }), SEND_TIMEOUT_MS, 'Sending');
-  rememberSent(id, sent); // needed to answer "please resend" requests from recipients' phones
+  const sending = s.sock.sendMessage(jid, { text });
+  // Remember it even if it only completes after we stopped waiting: needed to answer "please resend"
+  // requests from recipients' phones (otherwise they're stuck on "Waiting for this message")
+  sending.then((sent) => rememberSent(id, sent)).catch(() => {});
+  const sent = await withTimeout(sending, SEND_TIMEOUT_MS, 'Sending');
   return sent?.key?.id;
 }
 

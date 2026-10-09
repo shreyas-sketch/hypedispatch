@@ -12,6 +12,7 @@ import { sendText, sleep, isConnected, onSendRejected, describeRejection } from 
 import { resolve, timeLabelOf, displayName, programmeOf } from './workshop.js';
 
 const running = new Set();
+const sending = new Set(); // "date|phase|group" being sent right now, so two workshops can't both send to one group at once
 const warned = new Set(); // problems already logged today, so the minute-by-minute check doesn't flood the log
 const GAP_MIN = Number(process.env.GROUP_GAP_MIN_MS || 4000);
 const GAP_MAX = Number(process.env.GROUP_GAP_MAX_MS || 7000);
@@ -69,6 +70,8 @@ onSendRejected((accountId, msgId, jid, code) => {
   const d = db();
   const rec = d.sends.find((s) => Object.entries(s.results || {}).some(([j, r]) => j === jid && r.msgId === msgId));
   if (!rec) { // e.g. a preview sent by hand
+    if (warned.has(`rej|${msgId}`)) return;
+    warned.add(`rej|${msgId}`);
     log('warn', `WhatsApp refused a message to ${jid}. ${describeRejection(code).text}`, { kind: 'notsent' });
     return;
   }
@@ -90,8 +93,13 @@ function launch(key, fn, label) {
   fn().catch((e) => log('error', `${label}: ${e.message}`)).finally(() => running.delete(key));
 }
 
+let warnedDate = '';
+// No automatic daily messages late at night (e.g. after the server was down all day, or a workshop added in the evening)
+export const LATEST_SEND_TIME = () => process.env.LATEST_SEND_TIME || '22:00';
+
 export async function tick(now = new Date()) {
   const { date, hm } = nowParts(now);
+  if (date !== warnedDate) { warned.clear(); warnedDate = date; }
   const d = db();
   for (const ws of d.workshops) {
     try { tickOne(ws, now, date, hm, d); } catch (e) { warnOnce(`${ws.id}|${date}|crash`, 'error', `Workshop ${ws.id} could not be checked (${e.message}). Open it and save it again.`, { kind: 'notsent', workshopId: ws.id }); }
@@ -139,6 +147,7 @@ function tickOne(ws, now, date, hm, d) {
     if (!ws.groups?.length) { why('no WhatsApp groups are picked for it'); return; }
     if (!ws.account) { why('no sending WhatsApp number is picked for it'); return; }
     if (rec?.done || notYet(rec, now)) return;
+    if (hm >= LATEST_SEND_TIME() && !rec) { why(`it was already past ${clock(LATEST_SEND_TIME())}, too late in the night to message the groups (it was probably down, or added in the evening)`); return; }
     launch(key, () => runSend(ws, phase, date, key, now), name);
   }
 }
@@ -182,6 +191,9 @@ function lineupOne(orig, now, today, hm, d, days, out) {
       const rec = d.sends.find((s) => s.key === `${ws.id}|${day}|${phase}`);
       if (rec?.done) continue; // already sent
       if (i === 0 && phase === 'dayof' && ws.startTime && hm >= ws.startTime) continue; // workshop already started
+      if (i === 0 && !rec && hm >= LATEST_SEND_TIME()) continue; // too late tonight
+      // every group already got this type of message today from another workshop
+      if (i === 0 && ws.groups?.length && ws.groups.every((g) => d.sends.some((s) => s.workshopId !== ws.id && s.date === day && s.phase === phase && s.results?.[g.jid]?.ok))) continue;
       const cur = new Set((ws.groups || []).map((g) => g.jid));
       const failedNow = rec ? Object.entries(rec.results || {}).filter(([jid, r]) => !r.ok && cur.has(jid)).map(([, r]) => r) : [];
       const retry = rec?.waiting ? `${rec.waiting}, will send as soon as it reconnects`
@@ -229,8 +241,9 @@ export async function runReschedule(ws, date, now = new Date()) {
 
   const out = await composeMessage(r, 'reschedule', d.history[ws.id] || []);
 
-  // Apply the change and create the send record together, so a crash can't lose it
-  if (!ws.pendingReschedule) return;
+  // Apply the change and create the send record together, so a crash can't lose it.
+  // Stop if it was cancelled, changed (the next check announces the new one) or the workshop deleted while writing.
+  if (ws.pendingReschedule !== pr || !db().workshops.includes(ws)) return;
   Object.assign(ws, { date: next.date, startTime: next.startTime, timeLabel: next.timeLabel });
   ws.reschedules = [...(ws.reschedules || []), { from: old.date, to: next.date, at: new Date().toISOString() }];
   delete ws.pendingReschedule;
@@ -274,16 +287,21 @@ export async function deliver(ws, rec, now = new Date()) {
   }
   delete rec.waiting;
   for (const g of ws.groups || []) {
+    // Paused or deleted meanwhile (e.g. while the message was being written): stop here
+    if (ws.active === false || !db().workshops.includes(ws)) { rec.done = true; rec.note = ws.active === false ? 'stopped: the workshop was paused' : 'stopped: the workshop was deleted'; save(); return; }
     const prev = rec.results[g.jid];
     if (prev?.ok || prev?.permanent || prev?.uncertain) continue; // done, never accepted, or might already be there
     // Never send the same kind of message to a group twice in one day, whichever workshop it comes from
-    const already = db().sends.find((s) => s !== rec && s.date === rec.date && s.phase === rec.phase && s.results?.[g.jid]?.ok);
+    const slotKey = `${rec.date}|${rec.phase}|${g.jid}`;
+    const already = db().sends.find((s) => s !== rec && s.date === rec.date && s.phase === rec.phase && s.results?.[g.jid]?.ok)
+      || (sending.has(slotKey) && { workshop: 'another workshop (sending right now)' });
     if (already) {
       rec.results[g.jid] = { ok: true, skipped: true, name: g.name, note: `already got today's ${PHASE_NAME[rec.phase]} from ${already.workshop}` };
       log('warn', `${rec.workshop}: skipped ${g.name}, it already got today's ${PHASE_NAME[rec.phase]} from ${already.workshop} (two workshops send to this group?)`, { kind: 'notsent', workshopId: rec.workshopId, key: rec.key });
       save();
       continue;
     }
+    sending.add(slotKey);
     try {
       const msgId = await sendText(ws.account, g.jid, rec.text);
       rec.results[g.jid] = { ok: true, name: g.name, at: new Date().toISOString(), msgId };
@@ -293,7 +311,7 @@ export async function deliver(ws, rec, now = new Date()) {
       // A timeout means we don't know if it went out: don't risk a duplicate, flag it instead
       const uncertain = /timed out/i.test(e.message);
       rec.results[g.jid] = { ok: false, name: g.name, error: why ? why.text : uncertain ? 'Sending took too long; it may or may not have gone out. Not resent, to avoid a duplicate. Check the group.' : e.message, permanent: !!why?.permanent, uncertain };
-    }
+    } finally { sending.delete(slotKey); }
     save();
     await sleep(GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN));
   }

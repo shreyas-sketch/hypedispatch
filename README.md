@@ -88,6 +88,8 @@ Press **📅 Reschedule** on the workshop in **This week** (or open it and scrol
 
 To change the wait, set `RESCHEDULE_DELAY_MIN=5` in `.env` (or Railway Variables).
 
+Daily messages never go out late at night: if one couldn't go out by **10 PM** (e.g. the server was down, or the workshop was added in the evening), it is skipped for that day and the Activity log says why. Change it with `LATEST_SEND_TIME=22:00`.
+
 ## How it avoids made-up content
 
 - Claude only sees the programme's fact sheet plus this run's date and time, never the open web.

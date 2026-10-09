@@ -173,6 +173,45 @@ assert.equal(dryRunSent.filter((m) => m.jid === 'slow@g.us').length, 0, 'never r
   assert.equal(d.log.filter((l) => l.msg.includes('probably also running somewhere else')).length, 1, 'flagged once a day');
 }
 
+// 14. Two workshops sending to the same group AT THE SAME TIME (slow WhatsApp): still only one message
+{
+  const { dryRunOpts } = await import('../src/wa.js');
+  dryRunOpts.delayMs = 400; dryRunSent.length = 0;
+  for (const id of ['w14a', 'w14b']) d.workshops.push({ id, programmeId: prog.id, date: '2026-10-25', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+    groups: [{ jid: 'race@g.us', name: 'Race group' }], firstSendDate: '2026-10-16' });
+  await tick(new Date('2026-10-16T11:00:00+05:30'));
+  await new Promise((r) => setTimeout(r, 1500));
+  dryRunOpts.delayMs = 0;
+  assert.equal(dryRunSent.filter((m) => m.jid === 'race@g.us').length, 1, 'no duplicate when both send at the same moment');
+}
+
+// 15. Late at night (server was down all day, or the workshop was added in the evening): nothing goes out
+dryRunSent.length = 0;
+d.workshops.push({ id: 'w15', programmeId: prog.id, date: '2026-10-25', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+  groups: [{ jid: 'late@g.us', name: 'Late' }], firstSendDate: '2026-09-01' });
+await tick(new Date('2026-10-17T22:30:00+05:30')); await wait();
+assert.equal(dryRunSent.filter((m) => m.jid === 'late@g.us').length, 0, 'no message at 10:30 PM');
+assert.ok(d.log.some((l) => l.msg.includes('too late in the night')));
+assert.ok(!lineup(new Date('2026-10-17T22:30:00+05:30')).some((m) => m.workshopId === 'w15' && m.date === '2026-10-17'), 'not shown as lined up tonight');
+await tick(new Date('2026-10-18T11:00:00+05:30')); await wait();
+assert.equal(dryRunSent.filter((m) => m.jid === 'late@g.us').length, 1, 'next morning it goes out as usual');
+
+// 16. Paused while the message is going out: the remaining groups are not sent to
+{
+  const { dryRunOpts } = await import('../src/wa.js');
+  dryRunOpts.delayMs = 300; dryRunSent.length = 0;
+  const w16 = { id: 'w16', programmeId: prog.id, date: '2026-10-25', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1',
+    groups: [{ jid: 'p1@g.us', name: 'P1' }, { jid: 'p2@g.us', name: 'P2' }, { jid: 'p3@g.us', name: 'P3' }], firstSendDate: '2026-09-01' };
+  d.workshops.push(w16);
+  await tick(new Date('2026-10-19T11:00:00+05:30'));
+  await new Promise((r) => setTimeout(r, 450));
+  w16.active = false;
+  await new Promise((r) => setTimeout(r, 1200));
+  dryRunOpts.delayMs = 0;
+  assert.ok(dryRunSent.filter((m) => /^p[123]@/.test(m.jid)).length < 3, 'stopped after pausing');
+  assert.ok(d.sends.find((s) => s.key === 'w16|2026-10-19|hype').note.includes('paused'));
+}
+
 console.log('Delivery tests passed ✓');
 fake.close();
 process.exit(0);
