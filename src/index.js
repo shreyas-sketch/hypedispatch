@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { db, save, newId, log } from './db.js';
 import { startAccount, accountStatus, listGroups, logoutAccount, sendText, resyncAccount } from './wa.js';
 import { fetchPageText, extractFacts, composeMessage, withLinks } from './ai.js';
@@ -11,9 +12,25 @@ import { resolve, timeLabelOf, displayName, syncWorkshopGroups } from './worksho
 import { onRailway, storageIsTemporary, dataDir } from './paths.js';
 
 const app = express();
+app.set('trust proxy', 1); // Railway: real client IP and https come from its proxy
 app.use(express.json({ limit: '2mb' }));
 
-// Optional password for the dashboard
+// ----- login session: a signed cookie, valid for SESSION_DAYS. Changing the password logs everyone out. -----
+const SESSION_DAYS = 30;
+const sign = (exp) => crypto.createHmac('sha256', `hype-dispatch|${process.env.DASHBOARD_PASSWORD}`).update(String(exp)).digest('base64url');
+const makeToken = () => { const exp = Date.now() + SESSION_DAYS * 86400_000; return `${exp}.${sign(exp)}`; };
+function safeEqual(a, b) {
+  const x = crypto.createHash('sha256').update(a).digest(), y = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(x, y);
+}
+function loggedIn(req) {
+  const m = /(?:^|;\s*)hd_session=([^;]+)/.exec(req.headers.cookie || '');
+  if (!m) return false;
+  const [exp, sig] = decodeURIComponent(m[1]).split('.');
+  return Number(exp) > Date.now() && !!sig && safeEqual(sig, sign(exp));
+}
+const sessionCookie = (req, value, maxAge) => `hd_session=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${req.secure ? '; Secure' : ''}`;
+
 // Health check for Railway (before the password, and reveals nothing)
 app.get('/healthz', (req, res) => res.send('ok'));
 
@@ -21,20 +38,46 @@ app.get('/healthz', (req, res) => res.send('ok'));
 const HOST = process.env.HOST || (onRailway() ? '0.0.0.0' : '127.0.0.1');
 const isPublic = !['127.0.0.1', 'localhost', '::1'].includes(HOST);
 const PASS = process.env.DASHBOARD_PASSWORD;
-if (isPublic && !PASS) {
-  // Never expose the controls for your WhatsApp numbers without a password
-  app.use((req, res) => res.status(503).type('html').send('<h2>Hype Dispatch is locked</h2><p>Set a <code>DASHBOARD_PASSWORD</code> variable (on Railway: your service → Variables), then redeploy. Log in with any username and that password.</p>'));
-}
-if (PASS) {
-  app.use((req, res, next) => {
-    const [, b64] = (req.headers.authorization || '').split(' ');
-    const creds = Buffer.from(b64 || '', 'base64').toString();
-    const pw = creds.slice(creds.indexOf(':') + 1); // passwords may contain ':'
-    if (creds.includes(':') && pw === PASS) return next();
-    res.set('WWW-Authenticate', 'Basic realm="Hype Dispatch"').status(401).send('Password required');
-  });
-}
-app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')));
+const LOCKED = isPublic && !PASS; // never expose the controls for your WhatsApp numbers without a password
+const PUB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const page = (file) => (req, res) => res.sendFile(path.join(PUB, file));
+
+// Public pages: the landing page, login and privacy, plus their images
+app.use('/assets', express.static(path.join(PUB, 'assets'), { maxAge: '1h' }));
+app.get('/', page('landing.html'));
+app.get('/privacy', page('privacy.html'));
+app.get('/login', (req, res) => (!LOCKED && (!PASS || loggedIn(req)) ? res.redirect('/app') : page('login.html')(req, res)));
+app.get('/api/auth', (req, res) => res.json({ locked: LOCKED, needsPassword: !!PASS, loggedIn: !LOCKED && (!PASS || loggedIn(req)) }));
+
+const tries = new Map(); // ip -> { n, until }: slows down password guessing
+app.post('/api/login', (req, res) => {
+  if (LOCKED) return res.status(503).json({ error: 'Login is switched off until DASHBOARD_PASSWORD is set on the server.' });
+  if (!PASS) return res.json({ ok: true });
+  const ip = req.ip || 'x';
+  const t = tries.get(ip);
+  if (t && t.n >= 8 && Date.now() < t.until) return res.status(429).json({ error: 'Too many attempts. Wait 15 minutes and try again.' });
+  if (!safeEqual(String(req.body?.password || ''), PASS)) {
+    const n = t && Date.now() < t.until ? t.n + 1 : 1;
+    tries.set(ip, { n, until: Date.now() + 15 * 60_000 });
+    return res.status(401).json({ error: 'That password is not right.' });
+  }
+  tries.delete(ip);
+  res.setHeader('Set-Cookie', sessionCookie(req, makeToken(), SESSION_DAYS * 86400));
+  res.json({ ok: true });
+});
+app.post('/api/logout', (req, res) => { res.setHeader('Set-Cookie', sessionCookie(req, '', 0)); res.json({ ok: true }); });
+
+// Everything below needs a login
+app.use((req, res, next) => {
+  if (LOCKED) {
+    if (req.path.startsWith('/api')) return res.status(503).json({ error: 'Set DASHBOARD_PASSWORD on the server first' });
+    return res.redirect('/login');
+  }
+  if (!PASS || loggedIn(req)) return next();
+  if (req.path.startsWith('/api')) return res.status(401).json({ error: 'Please log in again', login: true });
+  res.redirect('/login');
+});
+app.get(['/app', '/app/'], page('app.html'));
 
 // Promise.resolve().then() so synchronous throws also come back as { error } instead of an HTML stack trace
 const wrap = (fn) => (req, res) => Promise.resolve().then(() => fn(req, res)).catch((e) => res.status(400).json({ error: e.message }));
@@ -245,7 +288,7 @@ const PORT = Number(process.env.PORT || 4321);
 app.listen(PORT, HOST, async () => {
   console.log(`Hype Dispatch running → http://localhost:${PORT}`);
   console.log(`Data folder: ${dataDir()}`);
-  if (isPublic && !PASS) console.warn('Dashboard is reachable by others but DASHBOARD_PASSWORD is not set, so it is locked. Set it to unlock.');
+  if (LOCKED) console.warn('Dashboard is reachable by others but DASHBOARD_PASSWORD is not set, so it is locked. Set it to unlock.');
   if (storageIsTemporary()) console.warn('No Railway volume attached: workshops and WhatsApp logins will be lost on every redeploy. Attach a volume to this service.');
   if (!process.env.ANTHROPIC_API_KEY) console.warn('ANTHROPIC_API_KEY is missing in .env, AI drafting will fail.');
   log('info', 'Hype Dispatch started', { kind: 'system' });

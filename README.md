@@ -27,7 +27,7 @@ The **bonus form** is the short form that helps you tailor the workshop to each 
    pm2 save
    pm2-startup install
    ```
-5. Open **http://localhost:4321**.
+5. Open **http://localhost:4321**. That's the public landing page; press **Log in** (top right) or go straight to **http://localhost:4321/app** for the dashboard. On your own PC without a password, no login is needed.
 
 The PC must stay on and awake at send times (Settings → Power → Sleep: Never).
 
@@ -39,7 +39,7 @@ The PC must stay on and awake at send times (Settings → Power → Sleep: Never
    - `ANTHROPIC_API_KEY`: your key
    - `DASHBOARD_PASSWORD`: required. Until it's set, the dashboard stays locked, because anyone with the link could otherwise send from your numbers.
    - Optional: any other setting from `.env.example` (e.g. `RESCHEDULE_DELAY_MIN`).
-4. Service → **Settings → Networking → Generate Domain**. Open that link and sign in with any username and your password.
+4. Service → **Settings → Networking → Generate Domain**. Open that link: it shows the landing page. Press **Log in** (top right) and enter your password. You stay logged in on that device for 30 days; changing the password logs everyone out.
 5. Connect your WhatsApp numbers again by scanning the QR (logins from your PC don't carry over).
 
 Keep the service at **1 replica**: two copies would each send every message. `railway.json` sets the start command and health check (`/healthz`). All times stay in IST whatever region Railway uses. WhatsApp is more likely to flag numbers linked from cloud servers than from a home PC, so start with a number you can afford to lose.
@@ -89,6 +89,13 @@ Press **📅 Reschedule** on the workshop in **This week** (or open it and scrol
 To change the wait, set `RESCHEDULE_DELAY_MIN=5` in `.env` (or Railway Variables).
 
 Daily messages never go out late at night: if one couldn't go out by **10 PM** (e.g. the server was down, or the workshop was added in the evening), it is skipped for that day and the Activity log says why. Change it with `LATEST_SEND_TIME=22:00`.
+
+## Pages
+
+- `/`: public landing page explaining what Hype Dispatch does, with screenshots of the dashboard
+- `/login`: team password login (after 8 wrong tries it pauses for 15 minutes)
+- `/app`: the dashboard (needs the login when `DASHBOARD_PASSWORD` is set)
+- `/privacy`: what data is stored and sent
 
 ## How it avoids made-up content
 

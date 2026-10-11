@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hype Dispatch · Workshop reminders for WhatsApp communities</title>
+<meta name="description" content="Hype Dispatch writes a fresh reminder for every workshop from its landing page and posts it to your WhatsApp communities on schedule, so more people show up live.">
+<meta property="og:title" content="Hype Dispatch">
+<meta property="og:description" content="Workshop reminders for WhatsApp communities, written from your landing page and sent on schedule.">
+<meta property="og:image" content="/assets/dash-workshops.jpg">
+<link rel="icon" href="/assets/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+/* hero */
+.hero{padding:72px 0 56px;text-align:center}
+.hero .lead{margin:20px auto 0}
+.hero .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+.hero .note{margin-top:14px;font-size:13.5px;color:var(--muted)}
+.hero .shot{margin:56px auto 0;max-width:1080px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border:1px solid var(--line);border-radius:99px;background:var(--card);font-size:13.5px;color:var(--ink-2);margin-bottom:24px}
+.chip b{background:var(--ok-soft);color:var(--ok);font-size:12px;padding:2px 8px;border-radius:99px;font-weight:600}
+
+/* facts strip */
+.facts{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:var(--r-lg);background:var(--card);overflow:hidden}
+.facts div{padding:24px;border-left:1px solid var(--line)}
+.facts div:first-child{border-left:0}
+.facts b{display:block;font-size:26px;letter-spacing:-.02em;line-height:1.2}
+.facts span{font-size:14px;color:var(--muted)}
+@media (max-width:860px){.facts{grid-template-columns:1fr 1fr}.facts div:nth-child(3){border-left:0}.facts div:nth-child(n+3){border-top:1px solid var(--line)}}
+section.tight{padding-top:0}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;counter-reset:s}
+.steps .card{position:relative}
+.steps .card::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:14px;margin-bottom:16px}
+.steps p{margin:8px 0 0;color:var(--muted);font-size:15px}
+@media (max-width:960px){.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.steps{grid-template-columns:1fr}}
+
+/* messages */
+.split{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+@media (max-width:900px){.split{grid-template-columns:1fr;gap:36px}}
+.timeline{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.timeline li{display:grid;grid-template-columns:118px 1fr;gap:16px;padding:18px 0;border-top:1px solid var(--line)}
+.timeline li:first-child{border-top:0;padding-top:0}
+.timeline .when{font-size:13px;font-weight:600;color:var(--muted);padding-top:2px}
+.timeline p{margin:4px 0 0;color:var(--muted);font-size:15px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--bg);border:1px solid var(--line);color:var(--ink-2)}
+@media (max-width:520px){.timeline li{grid-template-columns:1fr;gap:4px}}
+.phone{max-width:440px;margin:0 auto}
+
+/* feature rows */
+.feature{display:grid;grid-template-columns:.8fr 1.2fr;gap:56px;align-items:center;padding:40px 0}
+.feature + .feature{border-top:1px solid var(--line)}
+.feature.flip{grid-template-columns:1.2fr .8fr}
+.feature.flip .text{order:2}
+.feature ul{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:10px}
+.feature li{display:flex;gap:10px;color:var(--ink-2);font-size:15.5px}
+.feature li::before{content:"";flex:none;width:18px;height:18px;margin-top:3px;border-radius:50%;background:var(--ok-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m6 10.5 2.5 2.5L14 7.5' fill='none' stroke='%231a9b5c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat}
+.feature p{color:var(--muted);margin:12px 0 0}
+@media (max-width:900px){.feature,.feature.flip{grid-template-columns:1fr;gap:28px}.feature.flip .text{order:0}}
+
+/* safety grid */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.grid3 p{margin:8px 0 0;color:var(--muted);font-size:15px}
+@media (max-width:900px){.grid3{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.grid3{grid-template-columns:1fr}}
+.alt{background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.alt .card{background:var(--bg)}
+
+/* faq */
+.faq{max-width:780px}
+.faq details{border-top:1px solid var(--line);padding:20px 0}
+.faq details:last-child{border-bottom:1px solid var(--line)}
+.faq summary{cursor:pointer;font-weight:600;font-size:16.5px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-weight:400;font-size:22px;line-height:1;color:var(--muted)}
+.faq details[open] summary::after{content:"–"}
+.faq p{margin:12px 0 0;color:var(--muted)}
+
+/* closing */
+.cta{text-align:center;padding:72px 24px;border-radius:var(--r-lg);background:var(--ink);color:var(--bg)}
+.cta h2{color:var(--bg)}
+.cta p{color:color-mix(in srgb,var(--bg) 72%,transparent);margin:14px auto 28px;max-width:520px}
+@media (prefers-color-scheme:dark){.cta{background:var(--card);border:1px solid var(--line);color:var(--ink)}.cta h2{color:var(--ink)}.cta p{color:var(--muted)}}
+</style>
+</head>
+<body>
+
+<header class="top" id="top">
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="Hype Dispatch home">Hype<span>.</span>Dispatch</a>
+    <nav aria-label="Page sections">
+      <a href="#how">How it works</a>
+      <a href="#messages">Messages</a>
+      <a href="#features">Dashboard</a>
+      <a href="#safety">Accuracy &amp; safety</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn small primary" href="/login">Log in</a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div class="chip"><b>For workshop teams</b> Reminders for WhatsApp communities</div>
+      <h1>Every workshop reminder,<br>written and sent on time.</h1>
+      <p class="lead">Hype Dispatch writes a fresh WhatsApp message for each workshop, every day, using only the facts on its landing page. It posts them to your communities at the time you set, so more of the people who joined actually show up live.</p>
+      <div class="ctas">
+        <a class="btn primary" href="/login">Log in to the dashboard</a>
+        <a class="btn" href="#how">See how it works</a>
+      </div>
+      <p class="note">For internal teams. Access is by team password.</p>
+      <figure class="shot" style="margin-bottom:0">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/assets/dash-workshops.jpg" width="2560" height="1600" alt="The Hype Dispatch dashboard showing today's messages, each marked sent, and the list of upcoming workshops with their next message.">
+      </figure>
+    </div>
+  </section>
+
+  <section class="tight" aria-label="At a glance">
+    <div class="wrap">
+      <div class="facts">
+        <div><b>3</b><span>reminders per workshop: daily, the day before, and on the day</span></div>
+        <div><b>60–80</b><span>words per message, short enough to be read</span></div>
+        <div><b>5 min</b><span>to undo a reschedule before anyone is told</span></div>
+        <div><b>1×</b><span>each message type per group per day, never doubled</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">How it works</span>
+        <h2>Set up a workshop once. The reminders run themselves.</h2>
+        <p>No daily copy-pasting into groups. Your team sets up each run in about two minutes, then checks the log.</p>
+      </div>
+      <div class="steps">
+        <div class="card"><h3>Add the landing page</h3><p>Paste a programme's landing page. Claude reads it once and builds a fact sheet: what attendees learn, who hosts it, the format.</p></div>
+        <div class="card"><h3>Link a WhatsApp number</h3><p>Scan a QR code from the phone that manages your communities, the same way you link WhatsApp Web.</p></div>
+        <div class="card"><h3>Add the workshop run</h3><p>Pick the date and time, paste the bonus form and Zoom links, and tick the groups that should get the messages.</p></div>
+        <div class="card"><h3>It sends on schedule</h3><p>Each day a new message is written, checked and posted at your chosen time. Every send is recorded in the Activity log.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="messages" class="alt">
+    <div class="wrap split">
+      <div>
+        <span class="eyebrow">The messages</span>
+        <h2>The right message for each day before the workshop</h2>
+        <p class="muted" style="margin:14px 0 32px;font-size:17px">Members have already joined, so every message is about one thing: getting them to show up live. Links and your team's sign-off are added automatically.</p>
+        <ol class="timeline">
+          <li><div class="when">Every day until then</div><div><h3>Daily hype</h3><p>One new angle each day: something they will learn, the host, or an outcome. Never repeats an earlier message.</p><div class="tags"><span class="tag">Bonus form link</span></div></div></li>
+          <li><div class="when">The day before</div><div><h3>"It's tomorrow"</h3><p>The time, what to expect, and a push to set a reminder now.</p><div class="tags"><span class="tag">Bonus form link</span><span class="tag">Zoom link</span></div></div></li>
+          <li><div class="when">Workshop day</div><div><h3>"We're live today"</h3><p>Sent a few hours before the start, with the link to join. Never sent once the workshop has started.</p><div class="tags"><span class="tag">Zoom link</span></div></div></li>
+          <li><div class="when">If the date moves</div><div><h3>Date-change announcement</h3><p>Goes out five minutes after you save the new date, so a mistake can still be cancelled.</p></div></li>
+        </ol>
+      </div>
+      <figure class="phone" style="margin:0">
+        <div class="shot"><img src="/assets/dash-preview.jpg" width="1120" height="1264" loading="lazy" alt="Preview of a day-before reminder: the workshop name and time in bold, two things attendees will learn, the bonus form link, the Zoom link and the team signature."></div>
+        <figcaption class="cap">A day-before reminder, as previewed in the dashboard. Bold text is WhatsApp formatting.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">The dashboard</span>
+        <h2>See what goes out, and when, at a glance</h2>
+        <p>Everything lives in one place: what is lined up, what was sent, and what needs attention.</p>
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <h3 style="font-size:22px">A plan for the whole week</h3>
+          <p>The Schedule shows each message before it goes out, with its time, its links and the groups it goes to. Nothing needs approving, and any message can be previewed.</p>
+          <ul><li>Next 7 days, day by day, for every workshop</li><li>Warnings when a number is disconnected or no groups are picked</li><li>Reschedule from the same screen</li></ul>
+        </div>
+        <div class="shot"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><img src="/assets/dash-schedule.jpg" width="2560" height="1600" loading="lazy" alt="The Schedule view listing messages lined up for today and tomorrow, and a seven-day grid by workshop."></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <h3 style="font-size:22px">Set up a run in one form</h3>
+          <p>Choose the workshop, the date, the links and the groups. A live summary under the form shows exactly what will be sent, and it warns you about clashes before you save.</p>
+          <ul><li>Groups and community announcement channels listed from WhatsApp</li><li>Duplicate last week's run in one click</li><li>Preview any message, or send a test to one group</li></ul>
+        </div>
+        <div class="shot"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><img src="/assets/dash-editor.jpg" width="2560" height="1800" loading="lazy" alt="The workshop form with steps for the workshop and date, the bonus form and Zoom links, and a list of WhatsApp groups to tick."></div>
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <h3 style="font-size:22px">A record of every send</h3>
+          <p>The Activity log lists every message sent, every one that was not sent and why, and every change your team made.</p>
+          <ul><li>Per-group results with the exact message text</li><li>Plain-language reasons when something was skipped</li><li>Filter by workshop, type or date, or search by group</li></ul>
+        </div>
+        <div class="shot"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><img src="/assets/dash-activity.jpg" width="2560" height="1600" loading="lazy" alt="The Activity log listing today's sent reminders with times, plus changes and connection events."></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="safety" class="alt">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Accuracy &amp; safety</span>
+        <h2>Written by AI, checked before every send</h2>
+        <p>Every message is checked before it goes out. A draft that fails the checks is rewritten, or replaced with a safe template.</p>
+      </div>
+      <div class="grid3">
+        <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div><h3>Facts only from your page</h3><p>The workshop name and host come from the programme. Any number, date or weekday that doesn't match the fact sheet gets the draft rejected.</p></div>
+        <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></div><h3>No selling to people who joined</h3><p>Prices and "register now" calls to action are blocked. Links are added by the system, never written by the AI.</p></div>
+        <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></div><h3>Never sent twice</h3><p>A group gets each type of message at most once a day, even if two workshops point at it. A second copy of the app sending from the same number is flagged in the log.</p></div>
+        <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div><h3>Quiet at night</h3><p>No automatic reminders after 10 PM. A message missed because the server was down is skipped, not sent at midnight.</p></div>
+        <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><h3>Retries that are careful</h3><p>Failed groups are retried every 5 minutes for about an hour. If WhatsApp may already have delivered a message, it is flagged for you instead of being resent.</p></div>
+        <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>Private by default</h3><p>The dashboard is behind a team password, and your data stays on your own server. <a href="/privacy">Read how data is handled</a>.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="head"><span class="eyebrow">FAQ</span><h2>Questions teams ask</h2></div>
+      <div class="faq">
+        <details><summary>Who is Hype Dispatch for?</summary><p>Teams that run recurring online workshops and keep each batch of attendees in a WhatsApp community or group. It handles the reminders between joining and the live session.</p></details>
+        <details><summary>Does it send messages to individuals?</summary><p>No. It only posts in the groups and community announcement channels you pick for each workshop, from a WhatsApp number your team links.</p></details>
+        <details><summary>Do we have to approve each message?</summary><p>No. Messages go out on their own at the time you set. You can preview any message in advance, pause a workshop, or change it at any time.</p></details>
+        <details><summary>What if the workshop date changes?</summary><p>Use Reschedule. The groups are told about the new date five minutes after you save it (or straight away with "Announce now"), and the daily reminders continue toward the new date.</p></details>
+        <details><summary>Can several workshops share one WhatsApp number?</summary><p>Yes. One number can send for any number of workshops, and you can link more than one number.</p></details>
+        <details><summary>What does each message cost?</summary><p>Messages are written with Claude through your own Anthropic API key and sent through your linked WhatsApp number. There is no per-message charge from Hype Dispatch.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="tight">
+    <div class="wrap">
+      <div class="cta">
+        <h2>Ready for this week's workshops?</h2>
+        <p>Log in to check what's lined up, add a new run, or see what went out today.</p>
+        <a class="btn primary" href="/login">Log in to the dashboard</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="logo" href="/" style="font-size:15px">Hype<span>.</span>Dispatch</a>
+    <span>Workshop reminders for WhatsApp communities</span>
+    <nav aria-label="Footer"><a href="#how">How it works</a><a href="/privacy">Privacy</a><a href="/login">Log in</a></nav>
+  </div>
+</footer>
+
+<script>
+  const top = document.getElementById('top');
+  const onScroll = () => top.classList.toggle('scrolled', scrollY > 8);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+</script>
+</body>
+</html>

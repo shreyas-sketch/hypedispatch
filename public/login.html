@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · Hype Dispatch</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+body{min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
+.side-form{display:flex;flex-direction:column;padding:28px 40px;min-height:100vh}
+.side-form .bar{display:flex;align-items:center;justify-content:space-between}
+.side-form .bar a.back{font-size:14px;color:var(--muted);text-decoration:none}
+.side-form .bar a.back:hover{color:var(--ink)}
+.box{width:100%;max-width:380px;margin:auto;padding:40px 0}
+.box h1{font-size:30px;line-height:1.2}
+.box > p{color:var(--muted);margin:10px 0 32px}
+form{display:grid;gap:18px}
+label{display:grid;gap:8px;font-size:14px;font-weight:600}
+.field{position:relative}
+input{font:inherit;font-size:16px;width:100%;padding:12px 76px 12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);transition:border-color .15s,box-shadow .15s}
+input:hover{border-color:var(--muted)}
+input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+input[aria-invalid="true"]{border-color:var(--bad)}
+.toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:none;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+.toggle:hover{color:var(--ink);background:var(--bg)}
+.btn.primary{width:100%;padding:13px 20px}
+.msg{display:none;gap:10px;align-items:flex-start;font-size:14px;padding:12px 14px;border-radius:12px}
+.msg.show{display:flex}
+.msg.err{background:var(--bad-soft);color:var(--bad)}
+.msg.info{background:var(--accent-soft);color:var(--ink-2)}
+.msg svg{flex:none;width:18px;height:18px;margin-top:1px}
+.help{font-size:13.5px;color:var(--muted);margin-top:28px;padding-top:20px;border-top:1px solid var(--line)}
+.legal{font-size:13px;color:var(--muted);display:flex;gap:16px}
+.legal a{text-decoration:none}.legal a:hover{color:var(--ink)}
+
+.side-art{background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;padding:56px;overflow:hidden}
+.side-art h2{font-size:26px;max-width:460px}
+.side-art ul{list-style:none;padding:0;margin:20px 0 36px;display:grid;gap:10px;color:var(--ink-2);font-size:15px}
+.side-art li{display:flex;gap:10px}
+.side-art li::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:10px}
+.side-art .shot{width:118%;max-width:none}
+@media (max-width:900px){body{grid-template-columns:1fr}.side-art{display:none}.side-form{padding:20px 16px}}
+.spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;animation:spin .7s linear infinite;display:none}
+.busy .spinner{display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="side-form">
+  <div class="bar">
+    <a class="logo" href="/">Hype<span>.</span>Dispatch</a>
+    <a class="back" href="/">← Back to site</a>
+  </div>
+
+  <div class="box">
+    <h1>Log in to your dashboard</h1>
+    <p>Enter your team password to manage workshops and see what's been sent.</p>
+
+    <div class="msg info" id="locked" role="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span>Login is switched off until a password is set on the server. Add a <b>DASHBOARD_PASSWORD</b> variable (on Railway: your service → Variables), then redeploy.</span>
+    </div>
+
+    <form id="form" novalidate>
+      <label for="pw">Team password
+        <span class="field">
+          <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus aria-describedby="err">
+          <button type="button" class="toggle" id="toggle" aria-controls="pw" aria-pressed="false">Show</button>
+        </span>
+      </label>
+      <div class="msg err" id="err" role="alert" aria-live="assertive">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <span id="errText"></span>
+      </div>
+      <button class="btn primary" id="submit" type="submit"><span class="spinner" aria-hidden="true"></span><span id="submitText">Log in</span></button>
+    </form>
+
+    <p class="help">Don't have the password? Ask the person who set up Hype Dispatch for your team. You stay logged in on this device for 30 days.</p>
+  </div>
+
+  <div class="legal"><span>© Hype Dispatch</span><a href="/privacy">Privacy</a><a href="/">Home</a></div>
+</div>
+
+<aside class="side-art" aria-hidden="true">
+  <h2>Every workshop reminder, written and sent on time.</h2>
+  <ul>
+    <li>Fresh messages every day, from your landing page</li>
+    <li>Sent to your WhatsApp communities on schedule</li>
+    <li>A full record of what went out, and what didn't</li>
+  </ul>
+  <div class="shot"><img src="/assets/dash-schedule.jpg" width="2560" height="1600" alt=""></div>
+</aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const form = $('form'), pw = $('pw'), btn = $('submit');
+const showError = (text) => { $('errText').textContent = text; $('err').classList.add('show'); pw.setAttribute('aria-invalid', 'true'); };
+const clearError = () => { $('err').classList.remove('show'); pw.removeAttribute('aria-invalid'); };
+const next = () => { const n = new URLSearchParams(location.search).get('next'); return n && n.startsWith('/app') ? n : '/app'; };
+
+fetch('/api/auth').then((r) => r.json()).then((a) => {
+  if (a.loggedIn) location.replace(next());
+  if (a.locked) { $('locked').classList.add('show'); form.querySelectorAll('input,button').forEach((x) => { x.disabled = true; }); }
+}).catch(() => {});
+
+$('toggle').addEventListener('click', () => {
+  const show = pw.type === 'password';
+  pw.type = show ? 'text' : 'password';
+  $('toggle').textContent = show ? 'Hide' : 'Show';
+  $('toggle').setAttribute('aria-pressed', String(show));
+  pw.focus();
+});
+pw.addEventListener('input', clearError);
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!pw.value) { showError('Enter the password.'); pw.focus(); return; }
+  btn.disabled = true; btn.classList.add('busy'); $('submitText').textContent = 'Logging in…';
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw.value }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { $('submitText').textContent = 'Opening dashboard…'; location.replace(next()); return; }
+    showError(j.error || 'Something went wrong. Try again.');
+    pw.select();
+  } catch { showError("Can't reach the server. Check your connection and try again."); }
+  btn.disabled = false; btn.classList.remove('busy'); $('submitText').textContent = 'Log in';
+});
+</script>
+</body>
+</html>

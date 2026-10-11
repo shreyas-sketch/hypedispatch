@@ -53,5 +53,32 @@ try {
   assert.equal((await call('PUT', '/api/workshops/ok', { active: false })).status, 200);
   await call('DELETE', '/api/accounts/a1');
   assert.equal((await call('PUT', '/api/workshops/ok', { active: true })).status, 200, 'still editable after its number was removed');
-  console.log('API tests passed ✓');
 } finally { srv.kill(); }
+
+// Login: the landing page is public, the dashboard and API need the password
+{
+  const port2 = port + 1;
+  const srv2 = spawn(process.execPath, [path.join(root, 'src', 'index.js')], { cwd: dir, env: { ...process.env, PORT: String(port2), HYPE_DRY_RUN: '1', HOST: '127.0.0.1', DASHBOARD_PASSWORD: 'pa:ss' }, stdio: 'ignore' });
+  const B2 = `http://127.0.0.1:${port2}`;
+  for (let i = 0; i < 50; i++) { try { await fetch(B2 + '/healthz'); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
+  const get = (u, cookie) => fetch(B2 + u, { redirect: 'manual', headers: cookie ? { cookie } : {} });
+  const login = (password) => fetch(B2 + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) });
+  try {
+    for (const u of ['/', '/login', '/privacy', '/assets/site.css']) assert.equal((await get(u)).status, 200, `${u} is public`);
+    assert.equal((await get('/app')).status, 302, 'dashboard redirects to login');
+    assert.equal((await get('/app.html')).status, 302, 'dashboard file is not served directly');
+    assert.equal((await get('/api/state')).status, 401);
+    assert.equal((await login('wrong')).status, 401);
+    const ok = await login('pa:ss');
+    assert.equal(ok.status, 200);
+    const cookie = ok.headers.get('set-cookie').split(';')[0];
+    assert.ok(/HttpOnly/i.test(ok.headers.get('set-cookie')));
+    assert.equal((await get('/app', cookie)).status, 200, 'logged in: dashboard opens');
+    assert.equal((await get('/api/state', cookie)).status, 200);
+    assert.equal((await get('/api/state', cookie.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')))).status, 401, 'a tampered cookie is refused');
+    assert.equal((await get('/api/state', 'hd_session=9999999999999.x')).status, 401, 'a forged cookie is refused');
+    for (let i = 0; i < 8; i++) await login('guess' + i);
+    assert.equal((await login('pa:ss')).status, 429, 'password guessing is slowed down');
+  } finally { srv2.kill(); }
+}
+console.log('API tests passed ✓');

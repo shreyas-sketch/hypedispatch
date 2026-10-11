@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hype Dispatch</title>
+<title>Hype Dispatch · Dashboard</title>
+<link rel="icon" href="/assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -118,6 +119,8 @@ main>*,.cols>*{min-width:0} /* let wide tables scroll inside their card instead 
 .tabs a.on{color:var(--ink);background:var(--bg);box-shadow:inset 0 -2px 0 var(--accent)}
 .tabs .pill{padding:1px 8px;font-size:11px}
 [data-tab]{display:none}
+header .pill{white-space:nowrap}
+@media (max-width:1240px){.tabs .long{display:none}.tabs .short{display:inline}}
 body[data-view="workshops"] [data-tab~="workshops"],body[data-view="schedule"] [data-tab~="schedule"],body[data-view="programmes"] [data-tab~="programmes"],
 body[data-view="numbers"] [data-tab~="numbers"],body[data-view="history"] [data-tab~="history"]{display:block}
 body[data-view="history"] .cols[data-tab~="history"]{display:grid}
@@ -174,6 +177,7 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
   <button id="storePill" class="pill bad" hidden onclick="toast('Railway wipes this server on every redeploy. Add a volume to the service (right-click it → Attach volume, any mount path) so workshops and WhatsApp logins are kept.')">Data not saved ⓘ</button>
   <button id="aiPill" class="pill" onclick="aiHelp()">AI</button>
   <span id="clock" class="pill"></span>
+  <button id="logoutBtn" class="ghost small" hidden onclick="api('/api/logout', { method: 'POST' }).then(() => { location.href = '/'; })">Log out</button>
 </header>
 
 <main>
@@ -426,6 +430,7 @@ let S = null, cur = null, curProg = null, allGroups = [], picked = new Map(), pv
 async function api(path, opts = {}) {
   const r = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && j.login) { location.href = '/login'; throw new Error('Please log in again'); }
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
@@ -735,7 +740,8 @@ function renderActivity() {
 
 async function refresh() {
   S = await api('/api/state');
-  $('clock').textContent = `${S.now.date} · ${S.now.hm} IST`;
+  $('clock').textContent = `${fmt12(S.now.hm)} IST`;
+  $('clock').title = `${niceDate(S.now.date)}, ${fmt12(S.now.hm)} IST`;
   $('storePill').hidden = !S.storageWarning;
   $('aiPill').className = 'pill ' + (S.aiReady ? 'ok' : 'bad');
   $('aiPill').textContent = S.aiReady ? 'Claude connected' : 'Add Anthropic key ⓘ';
@@ -1038,6 +1044,7 @@ function closeEditor() {
 editor.addEventListener('cancel', (e) => { e.preventDefault(); closeEditor(); });
 editor.addEventListener('input', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
 editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); if (e.target.id === 'f_date' && allGroups.length) renderGroups(); });
+fetch('/api/auth').then((r) => r.json()).then((a) => { $('logoutBtn').hidden = !a.needsPassword; }).catch(() => {});
 refresh(); setInterval(() => { if (!editor.open && !progDlg.open && !qpDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);
 </script>
 </body>

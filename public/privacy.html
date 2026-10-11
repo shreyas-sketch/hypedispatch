@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Hype Dispatch</title>
+<meta name="description" content="How Hype Dispatch handles data: what it stores, what it sends, and where.">
+<link rel="icon" href="/assets/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<style>
+article{max-width:720px;margin:0 auto;padding:56px 24px 88px}
+article h1{font-size:clamp(32px,4vw,42px)}
+article h2{font-size:21px;margin:40px 0 10px}
+article p,article li{color:var(--ink-2)}
+article ul{padding-left:20px;display:grid;gap:6px}
+.updated{color:var(--muted);font-size:14px;margin-top:10px}
+@media (max-width:600px){article{padding:40px 16px 64px}}
+</style>
+</head>
+<body>
+<header class="top scrolled">
+  <div class="wrap">
+    <a class="logo" href="/">Hype<span>.</span>Dispatch</a>
+    <span style="margin-right:auto"></span>
+    <a class="btn small primary" href="/login">Log in</a>
+  </div>
+</header>
+<main>
+<article>
+  <h1>Privacy and data</h1>
+  <p class="updated">How Hype Dispatch handles data</p>
+
+  <p>Hype Dispatch is a tool a workshop team runs on its own server to send reminder messages to its WhatsApp communities. This page explains what it stores, what it sends, and to whom.</p>
+
+  <h2>What is stored</h2>
+  <ul>
+    <li><b>Workshop details</b> your team enters: dates, times, links, chosen groups and message settings.</li>
+    <li><b>Fact sheets</b> built from your programmes' public landing pages.</li>
+    <li><b>Sent messages and an activity log</b>: what went to which group, when, and whether it was delivered.</li>
+    <li><b>The WhatsApp login</b> for each linked number, so it stays connected.</li>
+  </ul>
+  <p>All of this is kept on the server where your team runs Hype Dispatch. It is not sold or shared, and it is not used for advertising.</p>
+
+  <h2>What is not stored</h2>
+  <p>Hype Dispatch does not read, store or process the conversations in your groups, and it does not collect the phone numbers or messages of community members. It only keeps the names of the groups you pick so it can send to them.</p>
+
+  <h2>Services it uses</h2>
+  <ul>
+    <li><b>Anthropic (Claude)</b> writes each message. It receives the programme's fact sheet, the workshop date and time, and recent messages for that workshop (so it doesn't repeat them). No member data is sent.</li>
+    <li><b>WhatsApp</b> delivers the messages through the number your team links, to the groups your team picks.</li>
+    <li><b>Your hosting provider</b> (for example Railway) runs the server and stores its data.</li>
+  </ul>
+
+  <h2>Access</h2>
+  <p>The dashboard is protected by a team password. A login lasts 30 days on a device, and changing the password signs everyone out.</p>
+
+  <h2>Removing data</h2>
+  <p>Removing a WhatsApp number from the dashboard logs it out and deletes its stored login. Deleting a workshop stops all of its messages. To delete everything, the team that runs Hype Dispatch can remove its data folder or storage volume.</p>
+
+  <h2>Questions</h2>
+  <p>Hype Dispatch is run by the workshop team that sends you these messages. For questions about your data, contact that team directly.</p>
+</article>
+</main>
+<footer>
+  <div class="wrap">
+    <a class="logo" href="/" style="font-size:15px">Hype<span>.</span>Dispatch</a>
+    <nav aria-label="Footer"><a href="/">Home</a><a href="/login">Log in</a></nav>
+  </div>
+</footer>
+</body>
+</html>
