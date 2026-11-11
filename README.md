@@ -71,15 +71,26 @@ Dates and times are never taken from the landing page, because those are often o
 ## Every week: add each workshop run
 
 1. **Connect a number** once → scan the QR from WhatsApp → Linked devices.
-2. **+ New workshop** → pick the programme, date, start time (IST), bonus form link and Zoom link.
+2. **+ New workshop** → pick the programme, date (first day), **length** (1 or 2 days), start time (IST), bonus form link and Zoom link.
 3. **Pick the sending number and the community** (e.g. search "4th Oct").
 4. **Save.** That's it. Messages go out automatically every day at the hype time until the workshop.
 
 If you save after today's hype time, today's message goes out within a minute. To start tomorrow instead, change **Start sending from**.
 
+## Workshop length (1-day or 2-day)
+
+Each run has a **Length**. It starts from the programme's name ("2-Day Business Owners Workshop" → 2 days; anything else → 1 day), and you can change it per run.
+
+- Messages always match the run: a 1-day run of a "2-Day ..." programme is called **"1-Day ..."**, and a 2-day run lists both days (e.g. "Saturday, 21 November and Sunday, 22 November").
+- Facts from the landing page that state another length are left out, and any draft that mentions the wrong length is rejected and rewritten.
+- The daily hype, "tomorrow" and workshop-day messages count to the **first day**.
+
 ## Reschedules
 
-Press **📅 Reschedule** on the workshop in **This week** (or open it and scroll to Reschedule) → enter the new date (and new time if it changed).
+Press **📅 Reschedule** on the workshop in **This week** (or open it and scroll to Reschedule) → enter the new date, the new **length**, or both (and the new time if it changed).
+
+- **Only the length changed** (e.g. 2 days → 1 day, same date): leave the date blank and pick the new length. The groups get an update saying it's now 1 day instead of 2.
+- Changing the length in the normal form instead changes the messages from then on, without telling the groups.
 
 - The "date changed" message goes out **5 minutes after you save**, so you can still cancel a mistake.
 - **Announce now** skips the wait.

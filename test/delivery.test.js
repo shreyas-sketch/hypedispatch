@@ -212,6 +212,37 @@ assert.equal(dryRunSent.filter((m) => m.jid === 'late@g.us').length, 1, 'next mo
   assert.ok(d.sends.find((s) => s.key === 'w16|2026-10-19|hype').note.includes('paused'));
 }
 
+// 17. Workshop length: a 2-day programme run as 1 day, then changed back to 2 days by a reschedule
+{
+  const { resolve, lengthOf } = await import('../src/workshop.js');
+  const { validate } = await import('../src/ai.js');
+  const bo = d.programmes.find((p) => p.name === 'BO Chirag');
+  bo.factSheet = { title: 'Business Owners', duration: '2 days, 3 hours each', other_key_facts: ['Over 2 days you build your systems', '500+ owners trained'] };
+  const base = { id: 'w17', programmeId: bo.id, date: '2026-11-20', startTime: '19:00', sendTime: '11:00', active: true, account: 'a1', groups: [{ jid: 'len@g.us', name: 'Len' }], firstSendDate: '2026-11-01' };
+  assert.equal(lengthOf(base), 2, 'a "2-Day ..." programme defaults to 2 days');
+  const two = resolve(base).factSheet;
+  assert.equal(two.title, '2-Day Business Owners Workshop');
+  assert.equal(two.date_text, 'Friday, 20 November and Saturday, 21 November', 'both days are in the messages');
+  const one = resolve({ ...base, days: 1 }).factSheet;
+  assert.equal(one.title, '1-Day Business Owners Workshop', 'the name follows the length');
+  assert.equal(one.date_text, 'Friday, 20 November');
+  assert.equal(one.duration, undefined, 'facts that state another length are left out');
+  assert.deepEqual(one.other_key_facts, ['500+ owners trained']);
+  assert.ok(validate('Our 2-day sprint starts soon', { factSheet: one }, 'hype').some((i) => i.includes('this workshop is 1 day')), 'wrong length caught');
+  assert.ok(!validate('Our 1-day sprint starts soon', { factSheet: one }, 'hype').some((i) => i.includes('this workshop is')));
+
+  // Length-only reschedule (same date): the groups are told, and the workshop switches to 1 day
+  const w17 = { ...base, pendingReschedule: { date: '2026-11-20', days: 1, sendNow: true, enteredDate: '2026-11-10' } };
+  d.workshops.push(w17); dryRunSent.length = 0;
+  await tick(new Date('2026-11-10T15:00:00+05:30')); await wait();
+  const ann = dryRunSent.find((m) => m.jid === 'len@g.us');
+  assert.ok(ann, 'the change was announced');
+  assert.ok(/1 day/.test(ann.text) && /2 days/.test(ann.text), 'the announcement says it is now 1 day instead of 2');
+  assert.equal(w17.days, 1); assert.equal(w17.date, '2026-11-20'); assert.ok(!w17.pendingReschedule);
+  assert.ok(d.log.some((l) => l.msg.includes('now 1 day instead of 2 days')));
+  assert.equal(resolve(w17).factSheet.title, '1-Day Business Owners Workshop', 'later messages use the new length');
+}
+
 console.log('Delivery tests passed ✓');
 fake.close();
 process.exit(0);

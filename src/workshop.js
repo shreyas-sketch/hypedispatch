@@ -1,7 +1,7 @@
 // Joins a dated workshop run with its programme's fact sheet.
 import { db } from './db.js';
-import { prettyDate, prettyTime } from './time.js';
-import { PRICE } from './ai.js';
+import { prettyDate, prettyTime, addDays } from './time.js';
+import { PRICE, lengthsIn } from './ai.js';
 
 // Members have already paid, so price never goes into the messages: drop it from the facts Claude sees
 export function withoutPrice(facts) {
@@ -17,6 +17,34 @@ export function withoutPrice(facts) {
 
 export const programmeOf = (ws) => db().programmes.find((p) => p.id === ws.programmeId);
 
+// ----- Workshop length (1-day, 2-day, ...). A programme can run as 2 days one time and 1 day the next. -----
+export const lengthText = (n) => (n === 1 ? '1 day' : `${n} days`);
+// The run's own setting, else what the programme's name says ("2-Day ..."), else 1 day
+export function lengthOf(ws) {
+  const n = Number(ws?.days);
+  if (Number.isInteger(n) && n >= 1 && n <= 5) return n;
+  const prog = programmeOf(ws || {});
+  return lengthsIn(prog?.title || prog?.factSheet?.title)[0] || 1;
+}
+// "2-Day Business Owners Workshop" -> "1-Day Business Owners Workshop" for a 1-day run
+export const titleForLength = (title, n) => String(title || '').replace(/\b([1-5]|one|two|three|four|five)[-\s]day\b/i, (m) => `${n}${m.match(/[-\s]/)[0]}${/D/.test(m) ? 'Day' : 'day'}`);
+// Facts that state a different length ("over 2 days") would contradict this run: leave them out
+function withoutOtherLengths(facts, n) {
+  const clashes = (x) => typeof x === 'string' && lengthsIn(x).some((k) => k !== n);
+  const out = { ...facts };
+  for (const [k, v] of Object.entries(out)) {
+    if (k === 'title') continue;
+    if (Array.isArray(v)) out[k] = v.filter((x) => !clashes(x));
+    else if (clashes(v)) out[k] = undefined;
+  }
+  return out;
+}
+const datesText = (ws, n) => {
+  if (n === 1) return prettyDate(ws.date);
+  const last = addDays(ws.date, n - 1);
+  return n === 2 ? `${prettyDate(ws.date)} and ${prettyDate(last)}` : `${prettyDate(ws.date)} to ${prettyDate(last)}`;
+};
+
 export function timeLabelOf(ws) {
   return ws.timeLabel || (ws.startTime ? `${prettyTime(ws.startTime)} IST` : '');
 }
@@ -26,18 +54,23 @@ export function timeLabelOf(ws) {
 export function resolve(ws, old = null) {
   const prog = programmeOf(ws);
   if (!prog?.factSheet) return null;
-  const facts = withoutPrice(prog.factSheet);
+  const n = lengthOf(ws);
+  const facts = withoutOtherLengths(withoutPrice(prog.factSheet), n);
   const factSheet = {
     ...facts,
-    // The official name and host (set per programme) always win over what was read off the landing page
-    title: prog.title?.trim() || facts.title,
+    // The official name and host (set per programme) always win over what was read off the landing page.
+    // The name follows this run's length ("2-Day ..." becomes "1-Day ..." for a 1-day run).
+    title: titleForLength(prog.title?.trim() || facts.title, n),
     host: prog.host?.trim() || facts.host,
-    date_text: prettyDate(ws.date),
+    length_text: lengthText(n),
+    date_text: datesText(ws, n), // every day of the workshop
     time_text: timeLabelOf(ws),
   };
   if (old) {
-    factSheet.old_date_text = prettyDate(old.date);
+    const was = lengthOf(old);
+    factSheet.old_date_text = datesText(old, was);
     factSheet.old_time_text = old.timeLabel || '';
+    if (was !== n) factSheet.old_length_text = lengthText(was);
   }
   return { ...ws, name: ws.name || prog.name, signature: prog.signature || '', factSheet };
 }

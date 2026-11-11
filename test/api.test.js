@@ -45,7 +45,16 @@ try {
     assert.equal(r.status, 400, `${m} ${u} ${JSON.stringify(b)} should be rejected`);
     assert.ok(r.json?.error, 'with a readable error');
   }
+  for (const days of [0, 6, 1.5, 'two']) assert.equal((await call('PUT', '/api/workshops/ok', { days })).status, 400, `length ${days} rejected`);
   assert.equal(await snap(), before, 'rejected requests changed nothing');
+  // length: saved, shown, and changeable by a reschedule without moving the date
+  assert.equal((await call('PUT', '/api/workshops/ok', { days: 2 })).json.days, 2);
+  assert.equal((await call('GET', '/api/state')).json.workshops.find((w) => w.id === 'ok').daysShown, 2);
+  assert.equal((await call('POST', '/api/workshops/ok/reschedule', { days: 2 })).status, 400, 'nothing changed: refused');
+  const rs = await call('POST', '/api/workshops/ok/reschedule', { days: 1 });
+  assert.equal(rs.status, 200); assert.equal(rs.json.date, '2026-12-01'); assert.equal(rs.json.days, 1);
+  await call('DELETE', '/api/workshops/ok/reschedule');
+  assert.equal((await call('PUT', '/api/workshops/ok', { days: '' })).json.days, undefined, 'blank = follow the programme');
   assert.equal((await call('GET', '/api/nope')).status, 404);
   assert.ok((await call('GET', '/api/nope')).json.error, 'unknown API routes answer in JSON');
 

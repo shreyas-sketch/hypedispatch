@@ -3,6 +3,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as cheerio from 'cheerio';
 import { prettyDate } from './time.js';
 
+// Workshop lengths mentioned in a text: "2-Day", "2 days", "two-day" -> [2]
+const NUM = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+export const lengthsIn = (s) => [...String(s || '').matchAll(/\b([1-5]|one|two|three|four|five)[-\s]days?\b/gi)].map((m) => NUM[m[1].toLowerCase()] || Number(m[1]));
+
 const FACT_MODEL = process.env.FACT_MODEL || 'claude-sonnet-5-5';
 const MSG_MODEL = process.env.MSG_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -109,6 +113,7 @@ Hard rules:
 - Never mention price, cost, payment, fees, discounts, money, or whether it's paid or free.
 - Never ask them to register, sign up, enrol, buy or book. They already have. Talk to them as people who are in ("you're in", "your spot", "see you there").
 - Write the workshop name EXACTLY as the fact sheet's "title" (same words, same order), and the host's name exactly as "host". Never shorten or change them.
+- The workshop lasts exactly "length_text". Never call it a different length (no "2-day" for a 1-day workshop). For a workshop of more than one day, "date_text" lists every day: mention them all.
 - Every fact must come from the FACT SHEET. Do not invent numbers, results, testimonials, bonuses, scarcity, prices, names or claims. If unsure, leave it out.
 - Never write URLs or links.
 - Only use numbers that appear in the fact sheet.
@@ -139,6 +144,15 @@ SHAPE TO AIM FOR (about 70 words; the [brackets] are placeholders, fill them onl
 
 [Short push to block the time and be there live] 🙌`;
 
+// What exactly changed in a reschedule: the date, the length, or both
+function rescheduleExtra(f = {}) {
+  if (!f.old_length_text) return '';
+  const sameDate = f.old_date_text?.split(' and ')[0].split(' to ')[0] === f.date_text?.split(' and ')[0].split(' to ')[0] && (f.old_time_text || '') === (f.time_text || '');
+  return sameDate
+    ? `\nIMPORTANT: the start date and time have NOT changed. What changed is the LENGTH: it is now a ${f.length_text} workshop instead of ${f.old_length_text}. Announce that clearly in the first line (date_text says which day${f.length_text === '1 day' ? '' : 's'}). Do not say it was moved to a new date.`
+    : `\nIMPORTANT: the LENGTH also changed: it is now ${f.length_text} instead of ${f.old_length_text}. Say this clearly in the first two lines, together with the new date.`;
+}
+
 export async function draftMessage(ws, phase, previous = [], feedback = '') {
   const res = await ai().messages.create({
     model: MSG_MODEL,
@@ -151,7 +165,7 @@ export async function draftMessage(ws, phase, previous = [], feedback = '') {
       content: [
         `FACT SHEET:\n${JSON.stringify(ws.factSheet, null, 2)}`,
         `The workshop date and time are ONLY what the fact sheet's date_text and time_text say.`,
-        `TASK:\n${PHASE_BRIEF[phase]}`,
+        `TASK:\n${PHASE_BRIEF[phase]}${phase === 'reschedule' ? rescheduleExtra(ws.factSheet) : ''}`,
         linkBrief(ws, phase),
         previous.length ? `PREVIOUS MESSAGES (do not repeat these):\n${previous.slice(-6).map((m, i) => `${i + 1}. ${m}`).join('\n\n')}\n(Any date in these may be outdated. Never copy dates from them.)` : '',
         feedback ? `Your last draft was rejected: ${feedback}. Fix that.` : '',
@@ -217,6 +231,11 @@ export function validate(msg, ws, phase) {
   if (bold < 2) issues.push('bold the workshop name and the date and time with single asterisks, *like this*');
   if (bold > 5) issues.push('too much bold, keep it to 2-3 parts');
   if (phase === 'hype' && COUNTDOWN.test(msg)) issues.push('it reads like a countdown');
+  // Never the wrong length, e.g. "2-day workshop" when this run is 1 day
+  const n = Number(String(ws.factSheet?.length_text || '').split(' ')[0]);
+  const was = phase === 'reschedule' ? Number(String(ws.factSheet?.old_length_text || '').split(' ')[0]) : 0; // "was 2 days, now 1"
+  const wrong = n ? lengthsIn(msg).find((k) => k !== n && k !== was) : undefined;
+  if (wrong) issues.push(`it says ${wrong} day${wrong > 1 ? 's' : ''}, but this workshop is ${ws.factSheet.length_text}`);
 
   const src = sourceText(ws);
   // Whole-number match, so "10" isn't accepted just because the fact sheet says "100"
@@ -276,6 +295,14 @@ export function fallback(ws, phase) {
   // ~60-80 words like the AI messages (links and signature go underneath). Only fact-sheet facts; the rest is general.
   if (phase === 'tomorrow') {
     return `⏰ *Tomorrow is the day!*\n\n*${title}*${host} goes live *${at}*.${list}\n\nYou're in. Now be there live from the very first minute.\n\nThe people who show up live get the most out of it. Don't be the one catching up later 🔥\n\nSet a reminder right now and keep the time free 🙌`;
+  }
+  if (phase === 'reschedule' && f.old_length_text) {
+    const firstDay = (t) => String(t || '').split(' and ')[0].split(' to ')[0];
+    const sameDate = firstDay(f.old_date_text) === firstDay(f.date_text) && (f.old_time_text || '') === (f.time_text || '');
+    const head = sameDate
+      ? `📅 *Update on your workshop!*\n\nA quick change: it's now *${f.length_text}* instead of ${f.old_length_text}.\n\n*${title}* goes live *${at}*.`
+      : `📅 *New date alert!*\n\nIt's now *${f.length_text}* instead of ${f.old_length_text}, on a new date.\n\n*${title}* goes live *${at}* (earlier ${f.old_date_text}).`;
+    return `${head}\n\nSorry for the shuffle 🙏 Your spot is safe.${list}\n\nUpdate your calendar right now so you don't miss it.\n\nSame energy, same host. This is still the one not to miss 🔥`;
   }
   if (phase === 'reschedule') {
     return `📅 *New date alert!*\n\n*${title}* is now on *${at}*${f.old_date_text ? ` (earlier ${f.old_date_text}${f.old_time_text ? `, ${f.old_time_text}` : ''})` : ''}.\n\nSorry for the shuffle 🙏 Your spot is safe and nothing else changes.${list}\n\nUpdate your calendar right now so you don't miss it.\n\nSame energy, same content, just a new slot. This is still the one not to miss 🔥`;

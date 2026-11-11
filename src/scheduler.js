@@ -9,7 +9,7 @@ import { dataDir } from './paths.js';
 import { nowParts, phaseFor, sendTimeFor, addDays } from './time.js';
 import { composeMessage, withLinks, linksFor } from './ai.js';
 import { sendText, sleep, isConnected, onSendRejected, describeRejection } from './wa.js';
-import { resolve, timeLabelOf, displayName, programmeOf } from './workshop.js';
+import { resolve, timeLabelOf, displayName, programmeOf, lengthOf, lengthText } from './workshop.js';
 
 const running = new Set();
 const sending = new Set(); // "date|phase|group" being sent right now, so two workshops can't both send to one group at once
@@ -178,7 +178,7 @@ function lineupOne(orig, now, today, hm, d, days, out) {
       const at = nowParts(new Date(Math.max(Date.parse(sendAtOf(pr)), now.getTime())));
       out.push({ ...base, phase: 'reschedule', date: at.date, time: pr.sendNow ? hm : at.hm, newDate: pr.date, links: linksFor(orig, 'reschedule').map((l) => l.kind), blocked, due: pr.sendNow || now.getTime() >= Date.parse(sendAtOf(pr)) });
       // After the announcement, the daily messages continue toward the new date
-      ws = { ...orig, date: pr.date, startTime: pr.startTime || orig.startTime };
+      ws = { ...orig, date: pr.date, days: pr.days || orig.days, startTime: pr.startTime || orig.startTime };
       if (at.date === today) skipToday = true;
     }
     for (let i = 0; i < days; i++) {
@@ -229,10 +229,11 @@ export async function runReschedule(ws, date, now = new Date()) {
   const pr = ws.pendingReschedule;
   if (!pr) return;
   const name = displayName(ws);
-  const old = { date: ws.date, startTime: ws.startTime, timeLabel: timeLabelOf(ws) };
+  const old = { programmeId: ws.programmeId, date: ws.date, days: lengthOf(ws), startTime: ws.startTime, timeLabel: timeLabelOf(ws) };
   const next = {
     ...ws,
     date: pr.date,
+    days: pr.days || old.days, // a reschedule can also change the length (e.g. 2 days -> 1 day)
     startTime: pr.startTime || ws.startTime,
     timeLabel: pr.timeLabel || (pr.startTime ? '' : ws.timeLabel), // blank = derived from startTime
   };
@@ -244,14 +245,15 @@ export async function runReschedule(ws, date, now = new Date()) {
   // Apply the change and create the send record together, so a crash can't lose it.
   // Stop if it was cancelled, changed (the next check announces the new one) or the workshop deleted while writing.
   if (ws.pendingReschedule !== pr || !db().workshops.includes(ws)) return;
-  Object.assign(ws, { date: next.date, startTime: next.startTime, timeLabel: next.timeLabel });
-  ws.reschedules = [...(ws.reschedules || []), { from: old.date, to: next.date, at: new Date().toISOString() }];
+  Object.assign(ws, { date: next.date, days: next.days, startTime: next.startTime, timeLabel: next.timeLabel });
+  ws.reschedules = [...(ws.reschedules || []), { from: old.date, to: next.date, fromDays: old.days, toDays: next.days, at: new Date().toISOString() }];
   delete ws.pendingReschedule;
   const rec = newRecord(ws, `${ws.id}|${date}|reschedule`, date, 'reschedule', withLinks(out.text, r, 'reschedule'), out);
   rec.fromDate = old.date;
   d.history[ws.id] = [...(d.history[ws.id] || []), out.text].slice(-12);
   save();
-  log('info', `${name}: moved from ${old.date} to ${next.date}, announcing to ${ws.groups?.length || 0} groups`, { kind: 'change', workshopId: ws.id });
+  const what = [old.date !== next.date && `moved from ${old.date} to ${next.date}`, old.days !== next.days && `now ${lengthText(next.days)} instead of ${lengthText(old.days)}`, old.date === next.date && old.days === next.days && 'start time changed'].filter(Boolean).join(', ');
+  log('info', `${name}: ${what}, announcing to ${ws.groups?.length || 0} groups`, { kind: 'change', workshopId: ws.id });
   logWritten(rec, out);
   if (ws.groups?.length) await deliver(ws, rec, now);
   else { rec.done = true; save(); }

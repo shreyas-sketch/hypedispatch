@@ -319,8 +319,10 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
         <label class="span4">Workshop
           <select id="f_programmeId" autofocus></select>
           <span class="help">Messages are written from this workshop's landing page.</span></label>
-        <label class="span2">Workshop date
+        <label>Workshop date <span class="help" style="font-weight:600">(first day)</span>
           <input id="f_date" type="date"></label>
+        <label>Length
+          <select id="f_days"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option></select></label>
         <label class="span2">Start time (India time)
           <input id="f_startTime" type="time"></label>
       </div>
@@ -381,15 +383,17 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
     </div>
 
     <div class="section" id="rsSection">
-      <h4><span class="step">5</span>Date changed? Reschedule</h4>
+      <h4><span class="step">5</span>Date or length changed? Reschedule</h4>
       <div id="rsPending"></div>
       <div id="rsForm">
-        <p class="muted small" style="margin:0 0 10px">Enter the new date. A "date changed" message goes to the groups <b><span class="rsDelay">5</span> minutes</b> after you save, so you have time to cancel a mistake. After that, the daily messages continue toward the new date.</p>
+        <p class="muted small" style="margin:0 0 10px">Enter the new date, the new length (e.g. 2 days → 1 day), or both. An update message goes to the groups <b><span class="rsDelay">5</span> minutes</b> after you save, so you have time to cancel a mistake. After that, the daily messages continue with the new details.</p>
         <div class="form">
-          <label>New date<input id="r_date" type="date"></label>
+          <label>New date <span class="muted" style="font-weight:400">(blank = same)</span><input id="r_date" type="date"></label>
+          <label>New length<select id="r_days"></select></label>
           <label>New start (IST)<input id="r_startTime" type="time"></label>
-          <label class="span2">New time as written <span class="muted" style="font-weight:400">(optional)</span><input id="r_timeLabel" placeholder="Blank = start time + IST"></label>
+          <label>New time as written <span class="muted" style="font-weight:400">(optional)</span><input id="r_timeLabel" placeholder="Blank = start time + IST"></label>
         </div>
+        <div id="rsSummary" class="small" style="margin-top:8px"></div>
         <div class="row" style="margin-top:10px">
           <button id="rsLater" class="primary" onclick="reschedule(false)">Save, announce in <span class="rsDelay">5</span> min</button>
           <button id="rsNow" onclick="reschedule(true)">Announce now</button>
@@ -439,6 +443,11 @@ async function busy(btn, fn) { if (btn) btn.disabled = true; try { await fn(); }
 const fmt12 = (hm) => { if (!hm) return ''; let [h, m] = hm.split(':').map(Number); const a = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return m ? `${h}:${String(m).padStart(2, '0')} ${a}` : `${h} ${a}`; };
 const niceDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const progById = (id) => S.programmes.find((p) => p.id === id);
+// Workshop length: "2-Day ..." in the programme's name means 2 days, else 1 (same rule as the server)
+const LEN_WORD = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+const programmeDays = (id) => { const p = progById(id); const m = /\b([1-5]|one|two|three|four|five)[-\s]day/i.exec(p?.title || p?.factSheet?.title || ''); return m ? LEN_WORD[m[1].toLowerCase()] || Number(m[1]) : 1; };
+const titleForLength = (title, n) => String(title || '').replace(/\b([1-5]|one|two|three|four|five)[-\s]day\b/i, (m) => `${n}${m.match(/[-\s]/)[0]}${/D/.test(m) ? 'Day' : 'day'}`);
+const lenText = (n) => (n === 1 ? '1 day' : `${n} days`);
 
 // ---------- navigation (tabs follow the URL hash, so Back works) ----------
 const VIEWS = ['workshops', 'schedule', 'programmes', 'numbers', 'history'];
@@ -515,7 +524,7 @@ function renderWorkshops() {
   $('wsList').innerHTML = list.map((w) => {
     const st = wsStatus(w), past = isPast(w);
     return `<div class="wl" tabindex="0" role="button" onclick="openEditor('${w.id}')" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openEditor('${w.id}')}" title="Open">
-      <div><div class="nm">${esc(progById(w.programmeId)?.name || w.displayName)}</div><div class="small muted">${niceDate(w.date)}${w.timeLabelShown ? ' · ' + esc(w.timeLabelShown) : ''}${w.name ? ' · ' + esc(w.name) : ''}</div></div>
+      <div><div class="nm">${esc(progById(w.programmeId)?.name || w.displayName)}</div><div class="small muted">${niceDate(w.date)}${w.daysShown > 1 ? ` – ${niceDate(addDays(w.date, w.daysShown - 1))} · ${w.daysShown} days` : ' · 1 day'}${w.timeLabelShown ? ' · ' + esc(w.timeLabelShown) : ''}${w.name ? ' · ' + esc(w.name) : ''}</div></div>
       <div class="st">${st.problem ? `<button class="pill ${st.cls}" title="${st.fixText}" onclick="event.stopPropagation();${st.fix}">${st.text} →</button>` : `<span class="pill ${st.cls}">${st.text}</span>`}</div>
       <div class="nx small muted">${esc(nextFor(w))}</div>
       <div class="acts" onclick="event.stopPropagation()">
@@ -549,7 +558,7 @@ function dupWorkshop(id) {
   let date = addDays(src.date, 7);
   while (date < S.now.date || taken.has(date)) date = addDays(date, 7);
   const copy = {};
-  for (const k of ['programmeId', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'formLink', 'zoomLink', 'account']) copy[k] = src[k];
+  for (const k of ['programmeId', 'days', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'formLink', 'zoomLink', 'account']) copy[k] = src[k];
   openEditor(null, null, { ...copy, date, firstSendDate: S.now.date, active: true, groups: [], copiedFrom: src });
 }
 
@@ -816,7 +825,7 @@ async function buildFacts() {
 }
 
 // ---------- workshop editor ----------
-const F = ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'active', 'formLink', 'zoomLink', 'firstSendDate'];
+const F = ['name', 'programmeId', 'date', 'days', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime', 'active', 'formLink', 'zoomLink', 'firstSendDate'];
 function openEditor(id, focus, prefill) {
   cur = id ? S.workshops.find((w) => w.id === id) : null;
   const w = cur || prefill || { sendTime: '11:00', dayOf: true, dayOfTime: '10:00', active: true, date: addDays(S.now.date, 4), firstSendDate: S.now.date, startTime: '19:00' };
@@ -827,13 +836,17 @@ function openEditor(id, focus, prefill) {
   if (prefill?.copiedFrom) note.innerHTML = `⧉ Copied from <b>${esc(prefill.copiedFrom.displayName)}</b>: same number, links and times. Check the date, the <b>bonus form</b> and <b>Zoom</b> links are right for this run, then pick this run's groups below.`;
   $('delBtn').hidden = !cur;
   for (const k of F) $('f_' + k).value = k === 'dayOf' || k === 'active' ? String(w[k] !== false) : w[k] ?? ''; // missing = on, same as the scheduler
-  $('f_programmeId').onchange = () => { checkFacts(); if (!cur && !prefill) fillFromLastRun(); renderPlan(); }; checkFacts();
+  $('f_days').value = String(w.days || w.daysShown || programmeDays(w.programmeId));
+  $('f_programmeId').onchange = () => { checkFacts(); if (!cur) $('f_days').value = String(programmeDays($('f_programmeId').value)); if (!cur && !prefill) fillFromLastRun(); renderPlan(); }; checkFacts();
   $('moreSettings').open = !!cur && (cur.active === false || cur.dayOf === false);
   $('f_account').innerHTML = '<option value="">Choose sending number…</option>' + S.accounts.map((a) => `<option value="${a.id}" ${a.id === w.account ? 'selected' : ''}>${esc(a.name)} (${a.status})</option>`).join('');
   picked = new Map((w.groups || []).map((g) => [g.jid, g]));
   allGroups = []; $('pv').innerHTML = ''; $('pvMeta').textContent = ''; $('testRow').hidden = true; $('gSearch').value = '';
   ['r_date', 'r_startTime', 'r_timeLabel'].forEach((k) => { $(k).value = ''; });
   $('r_startTime').value = w.startTime || '';
+  const nowDays = w.days || w.daysShown || 1;
+  $('r_days').innerHTML = [1, 2, 3].map((n) => `<option value="${n}" ${n === nowDays ? 'selected' : ''}>${lenText(n)}${n === nowDays ? ' (same as now)' : ''}</option>`).join('');
+  rsSummary();
   renderReschedule();
   loadGroups();
   renderPlan();
@@ -849,6 +862,7 @@ function fillFromLastRun() {
   const note = $('prefillNote');
   if (!last) { note.hidden = true; return; }
   for (const k of ['startTime', 'sendTime', 'dayOfTime', 'timeLabel']) $('f_' + k).value = last[k] || $('f_' + k).value;
+  $('f_days').value = String(last.days || last.daysShown || $('f_days').value);
   $('f_dayOf').value = String(last.dayOf !== false);
   for (const k of ['formLink', 'zoomLink']) if (!$('f_' + k).value.trim()) $('f_' + k).value = last[k] || '';
   if (last.account && S.accounts.some((a) => a.id === last.account) && $('f_account').value !== last.account) { $('f_account').value = last.account; loadGroups(); }
@@ -866,6 +880,9 @@ function renderPlan() {
   const form = v('formLink').trim(), zoom = v('zoomLink').trim();
   const links = (arr) => arr.filter(Boolean).length ? ' with the ' + arr.filter(Boolean).join(' and ') : '';
   const rows = [];
+  const days = Number(v('days')) || 1;
+  const pTitle = progById(v('programmeId'))?.title || progById(v('programmeId'))?.factSheet?.title || '';
+  rows.push(['🗓️', `<b>${days}-day workshop</b> on ${Array.from({ length: days }, (_, i) => niceDate(addDays(date, i))).join(days === 2 ? ' and ' : ', ')}${pTitle ? `. Messages call it <b>${esc(titleForLength(pTitle, days))}</b>` : ''}`]);
   const hypeFrom = first, hypeTo = addDays(date, -2);
   if (hypeFrom <= hypeTo) rows.push(['📣', `<b>Daily hype message</b> ${hypeFrom === hypeTo ? `on ${niceDate(hypeFrom)}` : `every day from ${niceDate(hypeFrom)} to ${niceDate(hypeTo)}`} at ${send}${links([form && 'bonus form link'])}`]);
   const dayBefore = addDays(date, -1);
@@ -887,10 +904,11 @@ function renderPlan() {
     const also = others.find((w) => (w.groups || []).some((x) => x.jid === g.jid));
     if (also) { notes.push(`⚠️ The group <b>${esc(g.name)}</b> also gets messages from <b>${esc(also.displayName)}</b>.`); break; }
   }
+  if (cur && days !== cur.daysShown) notes.push(`ℹ️ Changing the length here only changes the messages from now on. To tell the groups about it, use <b>Reschedule</b> below instead.`);
   if (!form) notes.push('No bonus form link, so messages won\'t include one.');
   if (!zoom) notes.push('No Zoom link yet. Add it before the day-before message.');
   if (p?.signature) notes.push(`Every message ends with: ${waFormat(p.signature).replace(/\n/g, ' · ')}`);
-  $('plan').innerHTML = (rows.length ? rows.map(([i, t]) => `<div class="item"><span>${i}</span><div>${t}</div></div>`).join('') : '<div class="empty">That date has passed, so nothing more will be sent.</div>')
+  $('plan').innerHTML = (rows.length > 1 ? rows.map(([i, t]) => `<div class="item"><span>${i}</span><div>${t}</div></div>`).join('') : '<div class="empty">That date has passed, so nothing more will be sent.</div>')
     + (notes.length ? `<div class="small muted" style="display:grid;gap:4px;margin-top:4px">${notes.map((n) => `<div>${n}</div>`).join('')}</div>` : '');
 }
 
@@ -915,7 +933,7 @@ function renderReschedule() {
   $('rsForm').hidden = !!pr;
   document.querySelectorAll('.rsDelay').forEach((el) => { el.textContent = S.rescheduleDelay; });
   $('rsPending').innerHTML = pr ? `<div class="pending row">
-      <div class="grow"><b>Moving to ${niceDate(pr.date)}${pr.startTime ? ', ' + fmt12(pr.startTime) : ''}</b>
+      <div class="grow"><b>${pr.date === cur.date ? 'Changing to' : 'Moving to'} ${niceDate(pr.date)}${pr.days ? `, now ${lenText(pr.days)} (was ${lenText(cur.daysShown)})` : ''}${pr.startTime ? ', ' + fmt12(pr.startTime) : ''}</b>
       <div class="small">${whenAnnounced(pr)}. You can still cancel until then. After that, daily messages continue toward the new date.</div></div>
       <button class="small" onclick="preview('reschedule')">Preview</button>
       <button class="small" onclick="cancelReschedule()">Cancel</button></div>` : '';
@@ -924,7 +942,7 @@ function renderReschedule() {
 function collect() {
   const b = {};
   for (const k of F) b[k] = $('f_' + k).value;
-  b.dayOf = b.dayOf === 'true'; b.active = b.active === 'true';
+  b.dayOf = b.dayOf === 'true'; b.active = b.active === 'true'; b.days = Number(b.days);
   b.account = $('f_account').value;
   b.groups = [...picked.values()];
   return b;
@@ -946,10 +964,22 @@ async function saveWorkshop(silent) {
 }
 async function delWorkshop() { if (!confirm('Delete this workshop?')) return; await busy(null, async () => { await api('/api/workshops/' + cur.id, { method: 'DELETE' }); editor.close(); refresh(); }); }
 
+const rsBody = (now) => ({ date: $('r_date').value, days: Number($('r_days').value), startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value, sendNow: now });
+// One line saying what the groups will be told
+function rsSummary() {
+  if (!cur) return;
+  const b = rsBody(false), date = b.date || cur.date;
+  const parts = [];
+  if (b.date && b.date !== cur.date) parts.push(`new date <b>${niceDate(date)}</b> (was ${niceDate(cur.date)})`);
+  if (b.days !== cur.daysShown) parts.push(`now <b>${lenText(b.days)}</b> instead of ${lenText(cur.daysShown)}`);
+  if (b.startTime && b.startTime !== cur.startTime) parts.push(`new start <b>${fmt12(b.startTime)}</b>`);
+  $('rsSummary').innerHTML = parts.length ? `The groups will be told: ${parts.join(', ')}.` : '';
+}
 async function reschedule(now) {
-  const body = { date: $('r_date').value, startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value, sendNow: now };
-  if (!body.date) return toast('Pick the new date');
-  if (now && !confirm(`Announce the new date to ${cur.groups?.length || 0} group(s) right now?`)) return;
+  const body = rsBody(now);
+  const lengthChanges = body.days !== cur.daysShown;
+  if (!body.date && !lengthChanges && (!body.startTime || body.startTime === cur.startTime)) return toast('Pick the new date or the new length');
+  if (now && !confirm(`Announce the change to ${cur.groups?.length || 0} group(s) right now?`)) return;
   await busy(null, async () => {
     await api(`/api/workshops/${cur.id}/reschedule`, { method: 'POST', body });
     await refresh(); cur = S.workshops.find((w) => w.id === cur.id); renderReschedule();
@@ -1022,7 +1052,7 @@ async function preview(phase) {
   await busy(null, async () => {
     await saveWorkshop(true);
     $('pv').innerHTML = '<div class="empty">Writing…</div>';
-    const body = { phase, date: $('r_date').value, startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value };
+    const body = { phase, date: $('r_date').value, days: Number($('r_days').value), startTime: $('r_startTime').value, timeLabel: $('r_timeLabel').value };
     const r = await api(`/api/workshops/${cur.id}/preview`, { method: 'POST', body });
     pvText = r.text;
     $('pv').innerHTML = `<div class="preview">${waFormat(r.text)}</div>`;
@@ -1043,7 +1073,8 @@ function closeEditor() {
 }
 editor.addEventListener('cancel', (e) => { e.preventDefault(); closeEditor(); });
 editor.addEventListener('input', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); });
-editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('f_')) renderPlan(); if (e.target.id === 'f_date' && allGroups.length) renderGroups(); });
+editor.addEventListener('input', (e) => { if (e.target.id?.startsWith('r_')) rsSummary(); });
+editor.addEventListener('change', (e) => { if (e.target.id?.startsWith('r_')) rsSummary(); if (e.target.id?.startsWith('f_')) renderPlan(); if (e.target.id === 'f_date' && allGroups.length) renderGroups(); });
 fetch('/api/auth').then((r) => r.json()).then((a) => { $('logoutBtn').hidden = !a.needsPassword; }).catch(() => {});
 refresh(); setInterval(() => { if (!editor.open && !progDlg.open && !qpDlg.open) refresh(); else api('/api/state').then((s) => { S = s; }); }, 5000);
 </script>

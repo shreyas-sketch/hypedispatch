@@ -8,7 +8,7 @@ import { startAccount, accountStatus, listGroups, logoutAccount, sendText, resyn
 import { fetchPageText, extractFacts, composeMessage, withLinks } from './ai.js';
 import { startScheduler, RESCHEDULE_DELAY_MIN, lineup } from './scheduler.js';
 import { nowParts, phaseFor, prettyTime } from './time.js';
-import { resolve, timeLabelOf, displayName, syncWorkshopGroups } from './workshop.js';
+import { resolve, timeLabelOf, displayName, syncWorkshopGroups, lengthOf, lengthText } from './workshop.js';
 import { onRailway, storageIsTemporary, dataDir } from './paths.js';
 
 const app = express();
@@ -88,6 +88,13 @@ const findProg = (id) => { const p = db().programmes.find((x) => x.id === id); i
 // A real calendar date (rejects "tomorrow", "2026-02-30", "")
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
 const isTime = (s) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s || '');
+// Workshop length in days: 1-5, or blank to follow the programme's name ("2-Day ...")
+function parseDays(v) {
+  if (v === '' || v == null) return undefined;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 5) throw new Error('Workshop length must be 1 to 5 days');
+  return n;
+}
 
 const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.error('state:', e.message); return fallback; } };
 
@@ -105,7 +112,7 @@ app.get('/api/state', (req, res) => {
     lineup: safe(() => lineup(), []),
     programmes: d.programmes.map((p) => ({ ...p, pageText: undefined })),
     accounts: d.accounts.map((a) => ({ ...a, ...accountStatus(a.id) })),
-    workshops: d.workshops.map((w) => ({ ...w, displayName: safe(() => displayName(w), 'Workshop'), timeLabelShown: safe(() => timeLabelOf(w), ''), today: safe(() => phaseFor(w, date), {}) })),
+    workshops: d.workshops.map((w) => ({ ...w, displayName: safe(() => displayName(w), 'Workshop'), timeLabelShown: safe(() => timeLabelOf(w), ''), daysShown: safe(() => lengthOf(w), 1), today: safe(() => phaseFor(w, date), {}) })),
     sends: d.sends.slice(0, 60),
     log: (d.log || []).slice(0, 200),
   });
@@ -172,7 +179,7 @@ app.post('/api/programmes/:id/facts', wrap(async (req, res) => {
 
 // ----- workshops (a dated run of a programme, sent to its communities) -----
 const FIELDS = ['name', 'programmeId', 'date', 'startTime', 'timeLabel', 'sendTime', 'dayOf', 'dayOfTime',
-  'account', 'groups', 'zoomLink', 'formLink', 'active', 'firstSendDate'];
+  'account', 'groups', 'zoomLink', 'formLink', 'active', 'firstSendDate', 'days'];
 // Check everything on a copy first, so a bad request can never leave a half-changed workshop behind
 function applyFields(ws, body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Bad request');
@@ -189,6 +196,7 @@ function applyFields(ws, body) {
   if (next.firstSendDate && !isDate(next.firstSendDate)) throw new Error('"Start sending from" must be a date');
   for (const k of ['zoomLink', 'formLink']) if (next[k] && !/^https?:\/\/\S+$/i.test(next[k])) throw new Error(`The ${k === 'zoomLink' ? 'Zoom' : 'bonus form'} link must start with https://`);
   for (const k of ['active', 'dayOf']) if (k in body) next[k] = body[k] !== false && body[k] !== 'false';
+  if ('days' in body) next.days = parseDays(body.days);
   if (!Array.isArray(next.groups)) throw new Error('groups must be a list');
   next.groups = next.groups.filter((g) => g && typeof g.jid === 'string' && g.jid).map((g) => ({ jid: g.jid, name: String(g.name || g.jid) }));
   Object.assign(ws, next);
@@ -204,8 +212,8 @@ app.post('/api/workshops', wrap((req, res) => {
   res.json(ws);
 }));
 const LABELS = { date: 'workshop date', startTime: 'start time', sendTime: 'daily message time', dayOf: 'workshop-day message', dayOfTime: 'workshop-day message time',
-  active: 'sending', firstSendDate: 'start sending from', formLink: 'bonus form link', zoomLink: 'Zoom link', account: 'sending number', programmeId: 'programme', name: 'name', timeLabel: 'time wording' };
-const shown = (k, v) => k === 'active' ? (v === false ? 'paused' : 'on') : k === 'dayOf' ? (v === false ? 'off' : 'on') : (v || '(blank)');
+  active: 'sending', firstSendDate: 'start sending from', days: 'length', formLink: 'bonus form link', zoomLink: 'Zoom link', account: 'sending number', programmeId: 'programme', name: 'name', timeLabel: 'time wording' };
+const shown = (k, v) => k === 'days' ? (v ? lengthText(v) : 'from the programme') : k === 'active' ? (v === false ? 'paused' : 'on') : k === 'dayOf' ? (v === false ? 'off' : 'on') : (v || '(blank)');
 app.put('/api/workshops/:id', wrap((req, res) => {
   const ws = findWs(req.params.id);
   const before = structuredClone(ws);
@@ -228,15 +236,18 @@ app.delete('/api/workshops/:id', wrap((req, res) => {
 // Reschedule: saved now, announced a few minutes later (so it can still be cancelled) or immediately with sendNow
 app.post('/api/workshops/:id/reschedule', wrap((req, res) => {
   const ws = findWs(req.params.id);
-  const { date, startTime, timeLabel, sendNow } = req.body;
+  const { startTime, timeLabel, sendNow } = req.body;
+  const date = req.body.date || ws.date; // blank = same date (e.g. only the length changes)
+  const days = parseDays(req.body.days);
   if (!isDate(date)) throw new Error('Pick the new date');
   if (startTime && !isTime(startTime)) throw new Error('The new start time must look like 19:00');
   if (date < nowParts().date) throw new Error('The new date is in the past');
-  if (date === ws.date && (!startTime || startTime === ws.startTime)) throw new Error('That is the same date and time');
+  const lengthChanges = days && days !== lengthOf(ws);
+  if (date === ws.date && (!startTime || startTime === ws.startTime) && !lengthChanges) throw new Error('That is the same date, time and length');
   const sendAt = new Date(Date.now() + (sendNow ? 0 : RESCHEDULE_DELAY_MIN() * 60_000)).toISOString();
-  ws.pendingReschedule = { date, startTime: startTime || '', timeLabel: timeLabel || '', sendNow: !!sendNow, enteredDate: nowParts().date, enteredAt: new Date().toISOString(), sendAt };
+  ws.pendingReschedule = { date, ...(lengthChanges ? { days } : {}), startTime: startTime || '', timeLabel: timeLabel || '', sendNow: !!sendNow, enteredDate: nowParts().date, enteredAt: new Date().toISOString(), sendAt };
   save();
-  log('info', `${displayName(ws)}: reschedule to ${date} saved, ${sendNow ? 'announcing now' : `announcing in ${RESCHEDULE_DELAY_MIN()} min`}`, { kind: 'change', workshopId: ws.id });
+  log('info', `${displayName(ws)}: reschedule to ${date}${lengthChanges ? ` (${lengthText(days)})` : ''} saved, ${sendNow ? 'announcing now' : `announcing in ${RESCHEDULE_DELAY_MIN()} min`}`, { kind: 'change', workshopId: ws.id });
   res.json(ws.pendingReschedule);
 }));
 app.delete('/api/workshops/:id/reschedule', wrap((req, res) => {
@@ -258,11 +269,12 @@ app.post('/api/workshops/:id/preview', wrap(async (req, res) => {
   if (!['hype', 'tomorrow', 'dayof', 'reschedule'].includes(phase)) throw new Error('Unknown message type');
   let r;
   if (phase === 'reschedule') {
-    const pr = ws.pendingReschedule || req.body;
+    const pr = ws.pendingReschedule || { ...req.body, date: req.body.date || ws.date };
     if (!isDate(pr.date)) throw new Error('Enter the new date first');
-    const next = { ...ws, date: pr.date, startTime: pr.startTime || ws.startTime,
+    const days = parseDays(pr.days) || lengthOf(ws);
+    const next = { ...ws, date: pr.date, days, startTime: pr.startTime || ws.startTime,
       timeLabel: pr.timeLabel || (pr.startTime ? '' : ws.timeLabel) };
-    r = resolve(next, { date: ws.date, timeLabel: timeLabelOf(ws) });
+    r = resolve(next, { programmeId: ws.programmeId, date: ws.date, days: lengthOf(ws), timeLabel: timeLabelOf(ws) });
   } else r = resolve(ws);
   if (!r) throw new Error("This programme's fact sheet isn't built yet");
   const out = await composeMessage(r, phase, db().history[ws.id] || []);
