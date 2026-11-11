@@ -54,6 +54,20 @@ try {
   const rs = await call('POST', '/api/workshops/ok/reschedule', { days: 1 });
   assert.equal(rs.status, 200); assert.equal(rs.json.date, '2026-12-01'); assert.equal(rs.json.days, 1);
   await call('DELETE', '/api/workshops/ok/reschedule');
+  // Day 2 on its own date
+  for (const moreDates of [['2026-11-30'], ['2026-12-01'], ['nope'], []]) assert.equal((await call('PUT', '/api/workshops/ok', { days: 2, moreDates })).status, 400, `bad day 2 ${moreDates}`);
+  const two = await call('PUT', '/api/workshops/ok', { days: 2, moreDates: ['2026-12-08'] });
+  assert.equal(two.status, 200); assert.deepEqual(two.json.moreDates, ['2026-12-08']);
+  const st2 = (await call('GET', '/api/state')).json.workshops.find((w) => w.id === 'ok');
+  assert.deepEqual(st2.datesShown, ['2026-12-01', '2026-12-08']); assert.equal(st2.daysSource, 'set');
+  const rs2 = await call('POST', '/api/workshops/ok/reschedule', { date: '2026-12-02' });
+  assert.deepEqual(rs2.json.moreDates, ['2026-12-09'], 'day 2 moves with day 1');
+  await call('DELETE', '/api/workshops/ok/reschedule');
+  const rs3 = await call('POST', '/api/workshops/ok/reschedule', { moreDates: ['2026-12-10'] });
+  assert.equal(rs3.status, 200, 'only day 2 moves'); assert.equal(rs3.json.date, '2026-12-01');
+  await call('DELETE', '/api/workshops/ok/reschedule');
+  assert.equal((await call('POST', '/api/workshops/ok/reschedule', { moreDates: ['2026-12-08'] })).status, 400, 'nothing changed');
+  assert.equal((await call('PUT', '/api/workshops/ok', { days: 1 })).json.moreDates, undefined, 'back to 1 day: no day 2');
   assert.equal((await call('PUT', '/api/workshops/ok', { days: '' })).json.days, undefined, 'blank = follow the programme');
   assert.equal((await call('GET', '/api/nope')).status, 404);
   assert.ok((await call('GET', '/api/nope')).json.error, 'unknown API routes answer in JSON');

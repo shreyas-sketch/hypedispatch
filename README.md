@@ -79,17 +79,19 @@ If you save after today's hype time, today's message goes out within a minute. T
 
 ## Workshop length (1-day or 2-day)
 
-Each run has a **Length**. It starts from the programme's name ("2-Day Business Owners Workshop" → 2 days; anything else → 1 day), and you can change it per run.
+Each run has a **Length**. Pick **2 days** and the form asks for the **Day 1 date** and the **Day 2 date** (they don't have to be back to back, e.g. two Saturdays). Day 2 starts as the next day; change it if needed. Moving Day 1 moves Day 2 with it.
 
-- Messages always match the run: a 1-day run of a "2-Day ..." programme is called **"1-Day ..."**, and a 2-day run lists both days (e.g. "Saturday, 21 November and Sunday, 22 November").
+- Messages always match the run: a 1-day run of a "2-Day ..." programme is called **"1-Day ..."**, and a 2-day run names both dates (e.g. "Saturday, 21 November and Saturday, 28 November").
 - Facts from the landing page that state another length are left out, and any draft that mentions the wrong length is rejected and rewritten.
-- The daily hype, "tomorrow" and workshop-day messages count to the **first day**.
+- The daily hype, "tomorrow" and workshop-day messages count down to **Day 1**.
+- **Runs saved before lengths existed** get a best guess (from the programme's official name, the landing page, then what that run's earlier messages said) and show **"Length not confirmed"** under *Needs attention* until you open them and save once.
 
 ## Reschedules
 
 Press **📅 Reschedule** on the workshop in **This week** (or open it and scroll to Reschedule) → enter the new date, the new **length**, or both (and the new time if it changed).
 
 - **Only the length changed** (e.g. 2 days → 1 day, same date): leave the date blank and pick the new length. The groups get an update saying it's now 1 day instead of 2.
+- **2-day runs:** enter the new Day 1 date and, if Day 2 moves differently, the new Day 2 date. Leave Day 2 blank to keep the same gap after Day 1. To move only Day 2, leave Day 1 blank and enter the new Day 2 date.
 - Changing the length in the normal form instead changes the messages from then on, without telling the groups.
 
 - The "date changed" message goes out **5 minutes after you save**, so you can still cancel a mistake.

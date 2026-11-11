@@ -149,8 +149,9 @@ SHAPE TO AIM FOR (about 70 words; the [brackets] are placeholders, fill them onl
 
 // What exactly changed in a reschedule: the date, the length, or both
 function rescheduleExtra(f = {}) {
+  if (f.what_changed === 'dates of the later days') return `\nIMPORTANT: day 1 has NOT changed. Only the date of a later day moved (compare date_text with old_date_text). Say clearly which day moved and its new date.`;
   if (!f.old_length_text) return '';
-  const sameDate = f.old_date_text?.split(' and ')[0].split(' to ')[0] === f.date_text?.split(' and ')[0].split(' to ')[0] && (f.old_time_text || '') === (f.time_text || '');
+  const sameDate = f.what_changed === 'length'; // only the length changed
   return sameDate
     ? `\nIMPORTANT: the start date and time have NOT changed. What changed is the LENGTH: it is now a ${f.length_text} workshop instead of ${f.old_length_text}. Announce that clearly in the first line (date_text says which day${f.length_text === '1 day' ? '' : 's'}). Do not say it was moved to a new date.`
     : `\nIMPORTANT: the LENGTH also changed: it is now ${f.length_text} instead of ${f.old_length_text}. Say this clearly in the first two lines, together with the new date.`;
@@ -300,8 +301,7 @@ export function fallback(ws, phase) {
     return `⏰ *Tomorrow is the day!*\n\n*${title}*${host} goes live *${at}*.${list}\n\nYou're in. Now be there live from the very first minute.\n\nThe people who show up live get the most out of it. Don't be the one catching up later 🔥\n\nSet a reminder right now and keep the time free 🙌`;
   }
   if (phase === 'reschedule' && f.old_length_text) {
-    const firstDay = (t) => String(t || '').split(' and ')[0].split(' to ')[0];
-    const sameDate = firstDay(f.old_date_text) === firstDay(f.date_text) && (f.old_time_text || '') === (f.time_text || '');
+    const sameDate = f.what_changed === 'length';
     const head = sameDate
       ? `📅 *Update on your workshop!*\n\nA quick change: it's now *${f.length_text}* instead of ${f.old_length_text}.\n\n*${title}* goes live *${at}*.`
       : `📅 *New date alert!*\n\nIt's now *${f.length_text}* instead of ${f.old_length_text}, on a new date.\n\n*${title}* goes live *${at}* (earlier ${f.old_date_text}).`;

@@ -242,6 +242,29 @@ assert.equal(dryRunSent.filter((m) => m.jid === 'late@g.us').length, 1, 'next mo
   assert.ok(d.log.some((l) => l.msg.includes('now 1 day instead of 2 days')));
   assert.equal(resolve(w17).factSheet.title, '1-Day Business Owners Workshop', 'later messages use the new length');
 
+  // Day 2 on its own date (not back to back), and moving with day 1 in a reschedule
+  const { datesOf, rescheduledTo, lengthInfo } = await import('../src/workshop.js');
+  const split = { ...base, days: 2, moreDates: ['2026-11-28'] };
+  assert.equal(resolve(split).factSheet.date_text, 'Friday, 20 November and Saturday, 28 November');
+  assert.deepEqual(rescheduledTo(split, { date: '2026-11-27' }).moreDates, ['2026-12-05'], 'day 2 keeps its gap when day 1 moves');
+  assert.deepEqual(rescheduledTo(split, { date: '2026-11-27', moreDates: ['2026-11-29'] }).moreDates, ['2026-11-29']);
+  assert.deepEqual(rescheduledTo(split, { date: '2026-11-27', days: 1 }).moreDates, [], '1 day: no later days');
+  assert.deepEqual(datesOf({ ...base, days: 2 }), ['2026-11-20', '2026-11-21'], 'no day 2 given: the next day');
+  const moved = resolve(rescheduledTo(split, { date: '2026-11-20', moreDates: ['2026-11-29'] }), { programmeId: bo.id, date: '2026-11-20', days: 2, moreDates: ['2026-11-28'], timeLabel: '7 PM IST' }).factSheet;
+  assert.equal(moved.what_changed, 'dates of the later days', 'only day 2 moved');
+
+  // Runs saved before lengths existed: guessed from the name, the landing page or earlier messages, and flagged
+  const orphan = d.programmes.find((p) => p.name === 'Siddharth Ecom');
+  orphan.title = ''; orphan.factSheet = { title: 'Launch Method' };
+  const old = { id: 'w17old', programmeId: orphan.id, date: '2026-11-20' };
+  assert.deepEqual(lengthInfo(old), { n: 1, source: 'default' });
+  d.history.w17old = ['🔥 The *2-Day Launch Method Workshop* is almost here', 'Your 2-day sprint starts Friday'];
+  assert.deepEqual(lengthInfo(old), { n: 2, source: 'messages' }, 'earlier messages said 2-day');
+  orphan.factSheet.duration = '2 days';
+  assert.deepEqual(lengthInfo(old), { n: 2, source: 'facts' });
+  assert.equal(lengthInfo({ ...old, days: 1 }).source, 'set', 'once saved, the length is fixed');
+  delete d.history.w17old;
+
   // Names and phrases that aren't lengths, or are written differently
   const { titleForLength } = await import('../src/workshop.js');
   assert.equal(titleForLength('2-Days Business Bootcamp', 1), '1-Day Business Bootcamp', 'plural "2-Days" is handled');
