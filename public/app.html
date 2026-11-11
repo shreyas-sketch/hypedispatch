@@ -319,10 +319,11 @@ button.pill:hover{filter:brightness(.95);text-decoration:underline}
         <label class="span4">Workshop
           <select id="f_programmeId" autofocus></select>
           <span class="help">Messages are written from this workshop's landing page.</span></label>
-        <label>Workshop date <span class="help" style="font-weight:600">(first day)</span>
+        <label>Workshop date
           <input id="f_date" type="date"></label>
         <label>Length
-          <select id="f_days"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option></select></label>
+          <select id="f_days"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option></select>
+          <span class="help">For 2+ days, the date is day 1.</span></label>
         <label class="span2">Start time (India time)
           <input id="f_startTime" type="time"></label>
       </div>
@@ -445,8 +446,9 @@ const niceDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', {
 const progById = (id) => S.programmes.find((p) => p.id === id);
 // Workshop length: "2-Day ..." in the programme's name means 2 days, else 1 (same rule as the server)
 const LEN_WORD = { one: 1, two: 2, three: 3, four: 4, five: 5 };
-const programmeDays = (id) => { const p = progById(id); const m = /\b([1-5]|one|two|three|four|five)[-\s]day/i.exec(p?.title || p?.factSheet?.title || ''); return m ? LEN_WORD[m[1].toLowerCase()] || Number(m[1]) : 1; };
-const titleForLength = (title, n) => String(title || '').replace(/\b([1-5]|one|two|three|four|five)[-\s]day\b/i, (m) => `${n}${m.match(/[-\s]/)[0]}${/D/.test(m) ? 'Day' : 'day'}`);
+const LEN_RE = /(?<![\d.])\b([1-5])[-\s]days?\b|\b(one|two|three|four|five)-days?\b/i;
+const programmeDays = (id) => { const p = progById(id); const m = LEN_RE.exec(p?.title || p?.factSheet?.title || ''); return m ? (m[1] ? Number(m[1]) : LEN_WORD[m[2].toLowerCase()]) : 1; };
+const titleForLength = (title, n) => String(title || '').replace(LEN_RE, (m) => `${n}${m.match(/[-\s]/)[0]}${/D/.test(m) ? 'Day' : 'day'}${/s$/i.test(m) && n > 1 ? 's' : ''}`);
 const lenText = (n) => (n === 1 ? '1 day' : `${n} days`);
 
 // ---------- navigation (tabs follow the URL hash, so Back works) ----------
@@ -484,7 +486,8 @@ function renderSetup() {
 
 // ---------- Workshops home ----------
 const dayLabel = (d) => d === S.now.date ? 'Today' : d === addDays(S.now.date, 1) ? 'Tomorrow' : niceDate(d);
-const isPast = (w) => w.date < S.now.date && !w.pendingReschedule;
+const lastDay = (w) => addDays(w.date, (w.daysShown || 1) - 1); // a 2-day workshop is still on during its 2nd day
+const isPast = (w) => lastDay(w) < S.now.date && !w.pendingReschedule;
 // What state a workshop is in; problem = something that stops messages going out
 function wsStatus(w) {
   if (isPast(w)) return { cls: '', text: 'Finished' };
@@ -609,7 +612,7 @@ function renderTabs() {
 const PHASE_LABEL = { hype: 'Hype', tomorrow: 'Tomorrow', dayof: 'Live today', reschedule: 'Rescheduled' };
 function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function diff(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 864e5); }
-function phaseOn(w, day) { if (w.firstSendDate && day < w.firstSendDate && day !== w.date) return null; const d = diff(day, w.date); return d >= 2 ? 'hype' : d === 1 ? 'tomorrow' : d === 0 ? (w.dayOf !== false ? 'dayof' : 'event') : null; }
+function phaseOn(w, day) { const d = diff(day, w.date); if (d < 0 && -d < (w.daysShown || 1)) return 'event'; if (w.firstSendDate && day < w.firstSendDate && day !== w.date) return null; return d >= 2 ? 'hype' : d === 1 ? 'tomorrow' : d === 0 ? (w.dayOf !== false ? 'dayof' : 'event') : null; }
 
 const PHASE_TEXT = { hype: 'Daily hype', tomorrow: '"It\'s tomorrow" reminder', dayof: '"We\'re live today"', reschedule: 'Date change announcement' };
 const LINK_TEXT = (l) => l.length ? '+ ' + l.map((k) => (k === 'form' ? 'bonus form' : k)).join(' & ') : 'no links';
@@ -647,7 +650,7 @@ const waFormat = (t) => esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(
 
 function renderWeek() {
   const days = [...Array(7)].map((_, i) => addDays(S.now.date, i));
-  const ws = S.workshops.filter((w) => w.date >= S.now.date || w.pendingReschedule).sort((a, b) => a.date.localeCompare(b.date));
+  const ws = S.workshops.filter((w) => lastDay(w) >= S.now.date || w.pendingReschedule).sort((a, b) => a.date.localeCompare(b.date));
   if (!ws.length) { $('week').innerHTML = '<div class="empty">No upcoming workshops yet.<div style="margin-top:10px"><button class="primary" onclick="openEditor()">+ Add workshop</button></div></div>'; return; }
   const head = days.map((d, i) => `<th class="${i ? '' : 'today'}">${i ? niceDate(d) : 'Today'}</th>`).join('');
   const rows = ws.map((w) => {
@@ -665,7 +668,7 @@ function renderWeek() {
       if (pr) return d === S.now.date ? `<td class="cell"><span class="pill reschedule">Pending</span><div class="t">${pr.sendNow ? 'now' : clockOf(pr.sendAt)}</div></td>` : '<td></td>';
       const p = phaseOn(w, d);
       if (!p) return '<td></td>';
-      if (p === 'event') return `<td class="cell"><div class="star">★ Workshop</div></td>`;
+      if (p === 'event') return `<td class="cell"><div class="star">★ ${(w.daysShown || 1) > 1 ? `Day ${diff(w.date, d) + 1}` : 'Workshop'}</div></td>`;
       const t = p === 'dayof' ? w.dayOfTime : w.sendTime;
       const sent = S.sends.find((s) => s.key === `${w.id}|${d}|${p}` && s.done);
       return `<td class="cell"><span class="pill ${p}">${sent ? '✓ ' : ''}${PHASE_LABEL[p]}</span><div class="t">${t || ''}</div>${p === 'dayof' ? '<div class="star">★ ' + fmt12(w.startTime) + '</div>' : ''}</td>`;
@@ -845,7 +848,7 @@ function openEditor(id, focus, prefill) {
   ['r_date', 'r_startTime', 'r_timeLabel'].forEach((k) => { $(k).value = ''; });
   $('r_startTime').value = w.startTime || '';
   const nowDays = w.days || w.daysShown || 1;
-  $('r_days').innerHTML = [1, 2, 3].map((n) => `<option value="${n}" ${n === nowDays ? 'selected' : ''}>${lenText(n)}${n === nowDays ? ' (same as now)' : ''}</option>`).join('');
+  $('r_days').innerHTML = [1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === nowDays ? 'selected' : ''}>${lenText(n)}${n === nowDays ? ' (same as now)' : ''}</option>`).join('');
   rsSummary();
   renderReschedule();
   loadGroups();

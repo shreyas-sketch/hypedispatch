@@ -1,7 +1,7 @@
 // Joins a dated workshop run with its programme's fact sheet.
 import { db } from './db.js';
 import { prettyDate, prettyTime, addDays } from './time.js';
-import { PRICE, lengthsIn } from './ai.js';
+import { PRICE, lengthsIn, LENGTH_RE } from './ai.js';
 
 // Members have already paid, so price never goes into the messages: drop it from the facts Claude sees
 export function withoutPrice(facts) {
@@ -27,7 +27,11 @@ export function lengthOf(ws) {
   return lengthsIn(prog?.title || prog?.factSheet?.title)[0] || 1;
 }
 // "2-Day Business Owners Workshop" -> "1-Day Business Owners Workshop" for a 1-day run
-export const titleForLength = (title, n) => String(title || '').replace(/\b([1-5]|one|two|three|four|five)[-\s]day\b/i, (m) => `${n}${m.match(/[-\s]/)[0]}${/D/.test(m) ? 'Day' : 'day'}`);
+// Keeps the style: "2-Day" -> "1-Day", "2-Days" -> "1-Day", "1 day" -> "2 days"
+export const titleForLength = (title, n) => String(title || '').replace(new RegExp(LENGTH_RE().source, 'i'), (m) => {
+  const sep = m.match(/[-\s]/)[0], plural = /s$/i.test(m) && n > 1;
+  return `${n}${sep}${/D/.test(m) ? 'Day' : 'day'}${plural ? 's' : ''}`;
+});
 // Facts that state a different length ("over 2 days") would contradict this run: leave them out
 function withoutOtherLengths(facts, n) {
   const clashes = (x) => typeof x === 'string' && lengthsIn(x).some((k) => k !== n);

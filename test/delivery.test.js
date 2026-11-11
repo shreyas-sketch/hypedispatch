@@ -241,6 +241,14 @@ assert.equal(dryRunSent.filter((m) => m.jid === 'late@g.us').length, 1, 'next mo
   assert.equal(w17.days, 1); assert.equal(w17.date, '2026-11-20'); assert.ok(!w17.pendingReschedule);
   assert.ok(d.log.some((l) => l.msg.includes('now 1 day instead of 2 days')));
   assert.equal(resolve(w17).factSheet.title, '1-Day Business Owners Workshop', 'later messages use the new length');
+
+  // Names and phrases that aren't lengths, or are written differently
+  const { titleForLength } = await import('../src/workshop.js');
+  assert.equal(titleForLength('2-Days Business Bootcamp', 1), '1-Day Business Bootcamp', 'plural "2-Days" is handled');
+  assert.equal(titleForLength('Two-day Bootcamp', 1), '1-day Bootcamp');
+  assert.deepEqual(validate('One day you will thank yourself for showing up', { factSheet: two }, 'hype').filter((i) => i.includes('this workshop is')), [], '"one day" as a phrase is not a length');
+  assert.deepEqual(validate('Over 1.5 days of content', { factSheet: one }, 'hype').filter((i) => i.includes('this workshop is')), [], '"1.5 days" is not read as 5 days');
+  assert.ok(validate('Our two-day sprint', { factSheet: one }, 'hype').some((i) => i.includes('this workshop is 1 day')), '"two-day" still counts');
 }
 
 console.log('Delivery tests passed ✓');

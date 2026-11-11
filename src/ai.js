@@ -3,9 +3,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as cheerio from 'cheerio';
 import { prettyDate } from './time.js';
 
-// Workshop lengths mentioned in a text: "2-Day", "2 days", "two-day" -> [2]
+// Workshop lengths mentioned in a text: "2-Day", "2 days", "two-day" -> [2].
+// Number words only count when hyphenated ("two-day"), so "one day you'll thank yourself" isn't a length,
+// and a digit right after a dot ("1.5 days") isn't either.
 const NUM = { one: 1, two: 2, three: 3, four: 4, five: 5 };
-export const lengthsIn = (s) => [...String(s || '').matchAll(/\b([1-5]|one|two|three|four|five)[-\s]days?\b/gi)].map((m) => NUM[m[1].toLowerCase()] || Number(m[1]));
+export const LENGTH_RE = () => /(?<![\d.])\b([1-5])[-\s]days?\b|\b(one|two|three|four|five)-days?\b/gi;
+export const lengthsIn = (s) => [...String(s || '').matchAll(LENGTH_RE())].map((m) => (m[1] ? Number(m[1]) : NUM[m[2].toLowerCase()]));
 
 const FACT_MODEL = process.env.FACT_MODEL || 'claude-sonnet-5-5';
 const MSG_MODEL = process.env.MSG_MODEL || 'claude-haiku-4-5-20251001';

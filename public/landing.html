@@ -258,8 +258,9 @@ section.tight{padding-top:0}
 </footer>
 
 <script>
-  const top = document.getElementById('top');
-  const onScroll = () => top.classList.toggle('scrolled', scrollY > 8);
+  // (not named "top": that's a built-in browser name, and redeclaring it stops this script)
+  const topBar = document.getElementById('top');
+  const onScroll = () => topBar.classList.toggle('scrolled', scrollY > 8);
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 </script>
 </body>

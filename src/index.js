@@ -12,7 +12,8 @@ import { resolve, timeLabelOf, displayName, syncWorkshopGroups, lengthOf, length
 import { onRailway, storageIsTemporary, dataDir } from './paths.js';
 
 const app = express();
-app.set('trust proxy', 1); // Railway: real client IP and https come from its proxy
+// Railway: the real client IP and https come from its proxy. Elsewhere that header could be faked, so ignore it.
+app.set('trust proxy', onRailway() || process.env.TRUST_PROXY === '1' ? 1 : false);
 app.use(express.json({ limit: '2mb' }));
 
 // ----- login session: a signed cookie, valid for SESSION_DAYS. Changing the password logs everyone out. -----
@@ -54,6 +55,7 @@ app.post('/api/login', (req, res) => {
   if (LOCKED) return res.status(503).json({ error: 'Login is switched off until DASHBOARD_PASSWORD is set on the server.' });
   if (!PASS) return res.json({ ok: true });
   const ip = req.ip || 'x';
+  if (tries.size > 5000) for (const [k, v] of tries) if (Date.now() > v.until) tries.delete(k); // forget old attempts
   const t = tries.get(ip);
   if (t && t.n >= 8 && Date.now() < t.until) return res.status(429).json({ error: 'Too many attempts. Wait 15 minutes and try again.' });
   if (!safeEqual(String(req.body?.password || ''), PASS)) {
